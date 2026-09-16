@@ -1,9 +1,11 @@
 from __future__ import annotations
 
+from dataclasses import replace
+
 import pytest
 
 from hl_agent.data.models import Direction, Instrument
-from hl_agent.engine.config import StrategyConfig
+from hl_agent.engine.config import ConfigError, StrategyConfig
 from hl_agent.engine.dedup import DedupState
 from hl_agent.engine.guardrails import GateReason
 from hl_agent.engine.signals import Signal
@@ -50,6 +52,15 @@ def test_fallbacks_and_leverage_clamp() -> None:
     plan = plan_order(CFG, sig(), BTC, price=50_000.0, withdrawable=100.0, free_margin=100.0)
     assert isinstance(plan, OrderPlan)
     assert plan.leverage == 2 and plan.margin_usd == pytest.approx(20.0, rel=1e-2)
+    forced = StrategyConfig(slots=2, margin_pct=20.0, default_leverage=2, max_leverage=10)
+    forced = replace(forced, force_leverage=5)
+    plan = plan_order(
+        forced, sig(leverage=2.0), BTC, price=50_000.0, withdrawable=100.0, free_margin=100.0
+    )
+    assert isinstance(plan, OrderPlan)
+    assert plan.leverage == 5  # the research override ignores the signal, still under the cap
+    with pytest.raises(ConfigError):
+        replace(forced, force_leverage=0)
 
 
 def test_notional_and_margin_gates() -> None:

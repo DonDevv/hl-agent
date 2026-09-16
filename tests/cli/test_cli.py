@@ -45,7 +45,9 @@ def run_cli(*argv: str, capsys: pytest.CaptureFixture[str]) -> tuple[int, str]:
 def test_settings_and_dates(tmp_path: Path, settings: Path) -> None:
     assert cli.Settings.load(None).network is Network.TESTNET  # no file: defaults
     s = cli.Settings.load(settings)
-    assert s.address == ADDR and s.max_leverage == 3  # 5 in the file, clamped to 3
+    assert s.address == ADDR and s.max_leverage == 5  # settings may raise the cap...
+    (tmp_path / "wild.toml").write_text("[risk]\nmax_leverage = 50\n", encoding="utf-8")
+    assert cli.Settings.load(tmp_path / "wild.toml").max_leverage == 10  # ...up to 10x, no more
     (tmp_path / "bad.toml").write_text("[network]\nname = 'moon'\n", encoding="utf-8")
     with pytest.raises(cli.CliError):
         cli.Settings.load(tmp_path / "bad.toml")

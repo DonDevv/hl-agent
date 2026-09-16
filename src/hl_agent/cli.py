@@ -60,6 +60,8 @@ from hl_agent.telemetry.report import render_comparison, render_text, to_json
 
 DEFAULT_SETTINGS = Path("config/settings.toml")
 INSTRUMENTS_FILE = "instruments.json"
+MAX_LEVERAGE_CEILING = 10  # settings can raise the 3x default up to here, never beyond
+SAFE_LEVERAGE = 3
 _VAR = re.compile(r"\$\{([A-Za-z_][A-Za-z0-9_]*)")
 
 
@@ -97,7 +99,7 @@ class Settings:
         return cls(
             network=network,
             address=str(raw.get("account", {}).get("address", "")),
-            max_leverage=min(3, int(risk.get("max_leverage", 3))),  # 3x is a hard ceiling
+            max_leverage=min(MAX_LEVERAGE_CEILING, int(risk.get("max_leverage", 3))),
             min_notional_usd=float(risk.get("min_notional_usd", 10.0)),
             taker_pct=float(fees.get("taker_pct", 0.035)),
             cache_dir=Path(data.get("cache_dir", "data/cache")),
@@ -315,8 +317,9 @@ def cmd_backtest(args: argparse.Namespace, s: Settings) -> int:
         step_ms=args.step_hours * HOUR_MS,
         initial_cash=args.cash,
         sim=_sim(args, s),
-        max_leverage=s.max_leverage,
+        max_leverage=max(s.max_leverage, args.leverage or 0),
         env=package_env(package, s.address),
+        force_leverage=args.leverage,
     )
     metrics = from_result(result)
     print(render_text(metrics, title=result.strategy))
@@ -341,8 +344,9 @@ def cmd_walkforward(args: argparse.Namespace, s: Settings) -> int:
         step_ms=args.step_hours * HOUR_MS,
         initial_cash=args.cash,
         sim=_sim(args, s),
-        max_leverage=s.max_leverage,
+        max_leverage=max(s.max_leverage, args.leverage or 0),
         env=package_env(package, s.address),
+        force_leverage=args.leverage,
     )
     rows = [(f"fold{f.index} {fmt_when(f.start_ms)[:10]}", f.metrics) for f in wf.folds]
     print(render_comparison(rows))
@@ -453,6 +457,12 @@ class RecordingRunner(LiveRunner):
 
 def cmd_run(args: argparse.Namespace, s: Settings) -> int:
     check_network(s.network, accept_real_money=args.i_accept_real_money)
+    if s.max_leverage > SAFE_LEVERAGE:
+        print(
+            f"WARNING: leverage cap {s.max_leverage}x is above the {SAFE_LEVERAGE}x this agent "
+            f"was validated at; liquidation sits {100 / s.max_leverage:.0f}% away",
+            file=sys.stderr,
+        )
     package = Path(args.package)
     address = _address(s)
     out = run_dir(s, args.name or package.name)
@@ -539,6 +549,13 @@ def build_parser() -> argparse.ArgumentParser:
         sp.add_argument("--slippage-bps", type=float, default=5.0)
         sp.add_argument("--funding-hourly", type=float, default=0.0)
         sp.add_argument("--out", default=None, help="run name under runs/")
+        sp.add_argument(
+            "--leverage",
+            type=int,
+            default=None,
+            choices=range(1, MAX_LEVERAGE_CEILING + 1),
+            help="force every entry to this leverage (research only)",
+        )
 
     b = sub.add_parser("backtest", help="replay a package over the cache")
     sim_args(b)

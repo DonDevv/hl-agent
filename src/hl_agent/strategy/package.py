@@ -51,6 +51,7 @@ def load_package(
     enforce_timeout: bool = False,
     max_leverage: int = 3,
     env: dict[str, str] | None = None,
+    force_leverage: int | None = None,
 ) -> LoadedPackage:
     spec = load_runtime_spec(path, env)
     wallet = spec.strategy.wallet
@@ -70,6 +71,6 @@ def load_package(
         )
     return LoadedPackage(
         spec=spec,
-        engine_config=spec.engine_config(max_leverage=max_leverage),
+        engine_config=spec.engine_config(max_leverage=max_leverage, force_leverage=force_leverage),
         source=FanOutSource(runners),
     )

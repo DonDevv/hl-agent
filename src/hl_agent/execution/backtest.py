@@ -69,6 +69,7 @@ def prepare(
     price_interval: str = "1h",
     max_leverage: int = 3,
     env: dict[str, str] | None = None,
+    force_leverage: int | None = None,
 ) -> BacktestSetup:
     broker_ref: list[SimBroker] = []
     source = ReplaySource(
@@ -78,7 +79,12 @@ def prepare(
     broker = SimBroker(source, sim, initial_cash)
     broker_ref.append(broker)
     package = load_package(
-        package_path, source, freeze_time=True, env=env, max_leverage=max_leverage
+        package_path,
+        source,
+        freeze_time=True,
+        env=env,
+        max_leverage=max_leverage,
+        force_leverage=force_leverage,
     )
     engine = Engine(package.engine_config, broker, broker, package.source, now_ms=start_ms)
     return BacktestSetup(package, source, broker, engine)
@@ -135,6 +141,7 @@ def run_backtest(
     max_leverage: int = 3,
     env: dict[str, str] | None = None,
     flatten_at_end: bool = True,
+    force_leverage: int | None = None,
 ) -> BacktestResult:
     setup = prepare(
         package_path,
@@ -146,5 +153,6 @@ def run_backtest(
         price_interval=price_interval,
         max_leverage=max_leverage,
         env=env,
+        force_leverage=force_leverage,
     )
     return run(setup, end_ms=end_ms, step_ms=step_ms, flatten_at_end=flatten_at_end)

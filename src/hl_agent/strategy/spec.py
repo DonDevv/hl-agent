@@ -225,7 +225,11 @@ class RuntimeSpec(_Model):
         )
 
     def engine_config(
-        self, *, max_leverage: int = 3, min_notional_usd: float = 10.0
+        self,
+        *,
+        max_leverage: int = 3,
+        min_notional_usd: float = 10.0,
+        force_leverage: int | None = None,
     ) -> EngineConfig:
         s = self.strategy
         strategy = StrategyConfig(
@@ -236,6 +240,7 @@ class RuntimeSpec(_Model):
             default_leverage=s.default_leverage,
             max_leverage=max_leverage,
             min_notional_usd=min_notional_usd,
+            force_leverage=force_leverage,
         )
         return EngineConfig(strategy=strategy, dsl=self.dsl_config(), rails=self.guard_rails())
 

@@ -47,6 +47,8 @@ def plan_order(
         return GateReason.SIGNAL_NOT_READY
 
     requested = signal.leverage if signal.leverage is not None else float(cfg.default_leverage)
+    if cfg.force_leverage is not None:
+        requested = float(cfg.force_leverage)
     cap = min(cfg.max_leverage, instrument.max_leverage)
     leverage = max(1, min(int(requested), cap))
 

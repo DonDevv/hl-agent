@@ -73,6 +73,7 @@ def walk_forward(
     price_interval: str = "1h",
     max_leverage: int = 3,
     env: dict[str, str] | None = None,
+    force_leverage: int | None = None,
 ) -> WalkForward:
     out: list[Fold] = []
     for i, (a, b) in enumerate(split(start_ms, end_ms, folds, step_ms)):
@@ -88,6 +89,7 @@ def walk_forward(
             price_interval=price_interval,
             max_leverage=max_leverage,
             env=env,
+            force_leverage=force_leverage,
         )
         out.append(Fold(i, a, b, res, from_result(res)))
     return WalkForward(tuple(out))

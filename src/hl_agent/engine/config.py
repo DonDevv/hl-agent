@@ -98,6 +98,7 @@ class StrategyConfig:
     margin_pct: float  # fallback per-signal margin, percent of withdrawable
     default_leverage: int
     max_leverage: int = 3  # hard global cap; the account's, not the strategy's
+    force_leverage: int | None = None  # research knob: override what signals ask for
     min_notional_usd: float = 10.0
     allow_pyramiding: bool = False
 
@@ -108,3 +109,5 @@ class StrategyConfig:
             raise ConfigError("margin_pct must be in (0, 100]")
         if self.default_leverage < 1 or self.max_leverage < 1:
             raise ConfigError("leverage values must be >= 1")
+        if self.force_leverage is not None and self.force_leverage < 1:
+            raise ConfigError("force_leverage must be >= 1")
