@@ -23,7 +23,8 @@ tests/         pytest; fixtures are real recorded Hyperliquid payloads
 
 ```bash
 cp config/settings.example.toml config/settings.toml   # network, address, risk caps
-hl-agent fetch --assets BTC ETH SOL --intervals 1h 4h 1d   # mainnet history -> data/cache
+hl-agent fetch --assets BTC ETH SOL --intervals 1h 4h 1d --since 2023-01-01
+#   Hyperliquid mainnet history first, then Binance USDT-perp klines backfill older bars
 hl-agent validate strategies/compass                        # dry-run every scanner
 hl-agent backtest strategies/compass --start 2026-04-01 --out compass-q2
 hl-agent walkforward strategies/compass --folds 3
@@ -56,4 +57,6 @@ python -m venv .venv && .venv/Scripts/pip install -e ".[dev]"
 
 Hyperliquid serves at most ~5000 bars per interval and keeps a bounded history
 (1h ≈ 7 months, 4h ≈ 2+ years, 1d since listing). `CandleStore.sync` accumulates
-bars over time; run it regularly to extend the local 1h history.
+bars over time; `CandleStore.backfill` fills everything older from Binance
+USDT-perp klines (`data/binance_client.py`, public endpoint, no key). Hyperliquid
+bars are never overwritten, so live-venue data always wins where both exist.

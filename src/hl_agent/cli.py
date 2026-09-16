@@ -27,6 +27,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
+from hl_agent.data.binance_client import BinanceClient
 from hl_agent.data.history import CandleStore
 from hl_agent.data.hyperliquid_client import HyperliquidClient
 from hl_agent.data.models import AccountState, Instrument
@@ -212,20 +213,37 @@ def read_equity(path: Path) -> list[EquityPoint]:
 
 
 def cmd_fetch(args: argparse.Namespace, s: Settings) -> int:
+    """Hyperliquid (mainnet history) first, so its bars own every window it still serves;
+    Binance then only backfills what Hyperliquid has already forgotten."""
     since = parse_when(args.since)
     store = CandleStore(s.cache_dir)
-    with HyperliquidClient(Network.MAINNET.url) as client:  # history lives on mainnet
+    with HyperliquidClient(Network.MAINNET.url) as client:
         instruments = client.instruments()
         save_instruments(s.cache_dir, instruments)
         known = {i.name for i in instruments}
-        for asset in args.assets:
-            if asset not in known:
-                raise CliError(f"unknown asset {asset}")
-            for interval in args.intervals:
-                added = store.sync(client, asset, interval, since)
-                lo, hi = cache_window(store, [asset], interval)
-                print(f"{asset:<8}{interval:<4} +{added:<6} {fmt_when(lo)} -> {fmt_when(hi)}")
+        unknown = [a for a in args.assets if a not in known]
+        if unknown:
+            raise CliError(f"unknown asset(s) {unknown}")
+        if args.source in ("hyperliquid", "both"):
+            for asset in args.assets:
+                for interval in args.intervals:
+                    added = store.sync(client, asset, interval, since)
+                    _print_window(store, asset, interval, "hl", added)
+    if args.source in ("binance", "both"):
+        with BinanceClient() as binance:
+            for asset in args.assets:
+                if ":" in asset:
+                    print(f"{asset:<8}     skipped: no Binance market for HIP-3 assets")
+                    continue
+                for interval in args.intervals:
+                    added = store.backfill(binance, asset, interval, since)
+                    _print_window(store, asset, interval, "binance", added)
     return 0
+
+
+def _print_window(store: CandleStore, asset: str, interval: str, tag: str, added: int) -> None:
+    lo, hi = cache_window(store, [asset], interval)
+    print(f"{asset:<8}{interval:<4}{tag:<8} +{added:<6} {fmt_when(lo)} -> {fmt_when(hi)}")
 
 
 def _replay(s: Settings, assets: Sequence[str] | None) -> tuple[ReplaySource, list[Instrument]]:
@@ -496,6 +514,12 @@ def build_parser() -> argparse.ArgumentParser:
     f.add_argument("--assets", nargs="+", default=["BTC", "ETH", "SOL"])
     f.add_argument("--intervals", nargs="+", default=["1h", "4h", "1d"])
     f.add_argument("--since", default="2024-01-01")
+    f.add_argument(
+        "--source",
+        choices=["hyperliquid", "binance", "both"],
+        default="both",
+        help="binance only backfills bars older than the cached Hyperliquid history",
+    )
     f.set_defaults(fn=cmd_fetch)
 
     v = sub.add_parser("validate", help="dry-run every scanner of a package")

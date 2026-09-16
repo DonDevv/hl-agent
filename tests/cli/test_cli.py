@@ -7,10 +7,12 @@ import httpx
 import pytest
 
 from hl_agent import cli
+from hl_agent.data.binance_client import BinanceClient
 from hl_agent.data.history import CandleStore
 from hl_agent.data.hyperliquid_client import HyperliquidClient
 from hl_agent.execution.live import LiveMarketSource, Network
 from hl_agent.execution.runner import STOP_FILE
+from tests.data.test_binance import kline_handler
 from tests.execution.test_live import ADDR, FakeExchange, FakeInfo, info_handler
 from tests.strategy.conftest import INSTRUMENTS, STRATEGIES, H
 
@@ -122,6 +124,11 @@ def test_fetch_uses_mainnet_history(
         return HyperliquidClient(transport=httpx.MockTransport(info_handler))
 
     monkeypatch.setattr(cli, "HyperliquidClient", fake_client)
+    monkeypatch.setattr(
+        cli,
+        "BinanceClient",
+        lambda: BinanceClient(transport=httpx.MockTransport(kline_handler), sleep=lambda s: None),
+    )
     code, out = run_cli(
         "--settings",
         str(settings),
@@ -134,7 +141,10 @@ def test_fetch_uses_mainnet_history(
         "0",
         capsys=capsys,
     )
-    assert code == 0 and seen == [Network.MAINNET.url] and out.startswith("BTC     1h")
+    assert code == 0 and seen == [Network.MAINNET.url] and out.startswith("BTC     1h  hl")
+    assert "binance" in out  # default --source both: Binance backfilled the older bars
+    store = CandleStore(cli.Settings.load(settings).cache_dir)
+    assert store.first_open_ms("BTC", "1h") == 0
     code, _ = run_cli("--settings", str(settings), "fetch", "--assets", "DOGE", capsys=capsys)
     assert code == 2
 

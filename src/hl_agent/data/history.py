@@ -9,11 +9,21 @@ from __future__ import annotations
 from collections.abc import Sequence
 from datetime import UTC, datetime
 from pathlib import Path
+from typing import Protocol
 
 import polars as pl
 
-from hl_agent.data.hyperliquid_client import INTERVAL_MS, HyperliquidClient
+from hl_agent.data.hyperliquid_client import INTERVAL_MS
 from hl_agent.data.models import Candle, Interval
+
+
+class CandleSource(Protocol):
+    """Anything that serves closed candles for a window (Hyperliquid, Binance, a fake)."""
+
+    def candles(
+        self, asset: str, interval: Interval, start_ms: int, end_ms: int | None = None
+    ) -> list[Candle]: ...
+
 
 _SCHEMA = {
     "open_ms": pl.Int64,
@@ -86,6 +96,12 @@ class CandleStore:
             return None
         return int(frame["open_ms"].max())  # type: ignore[arg-type]
 
+    def first_open_ms(self, asset: str, interval: Interval) -> int | None:
+        frame = self.frame(asset, interval)
+        if frame.is_empty():
+            return None
+        return int(frame["open_ms"].min())  # type: ignore[arg-type]
+
     # ---- writes ------------------------------------------------------------
 
     def append(self, asset: str, interval: Interval, candles: Sequence[Candle]) -> int:
@@ -103,7 +119,7 @@ class CandleStore:
 
     def sync(
         self,
-        client: HyperliquidClient,
+        client: CandleSource,
         asset: str,
         interval: Interval,
         since: datetime | int,
@@ -118,6 +134,18 @@ class CandleStore:
         end = _ms(until) if until is not None else None
         fresh = client.candles(asset, interval, start, end)
         return self.append(asset, interval, fresh)
+
+    def backfill(
+        self, client: CandleSource, asset: str, interval: Interval, since: datetime | int
+    ) -> int:
+        """Fill ``[since, first stored bar)`` from a secondary source (Binance). Stored bars
+        are never overwritten, so the primary venue's data always wins where both exist."""
+        start = _ms(since)
+        first = self.first_open_ms(asset, interval)
+        end = first - 1 if first is not None else None
+        if end is not None and end < start:
+            return 0
+        return self.append(asset, interval, client.candles(asset, interval, start, end))
 
 
 def _ms(value: datetime | int) -> int:
