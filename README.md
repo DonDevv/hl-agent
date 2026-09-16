@@ -13,11 +13,36 @@ src/hl_agent/
   engine/      sizing, guardrails, DSL exits, dedup, step loop — pure, no I/O      (axe 3)
   execution/   Broker interface: simulated (backtest) and Hyperliquid (live)       (axe 4)
   telemetry/   event log, metrics, reports                                         (axe 5)
-  cli.py       fetch / validate / backtest / run / report                          (axe 6)
+  cli.py       fetch / validate / backtest / walkforward / run / report / status  (axe 6)
 strategies/    strategy packages (Senpi-format)
 config/        settings.example.toml → copy to settings.toml (git-ignored)
 tests/         pytest; fixtures are real recorded Hyperliquid payloads
 ```
+
+## Usage
+
+```bash
+cp config/settings.example.toml config/settings.toml   # network, address, risk caps
+hl-agent fetch --assets BTC ETH SOL --intervals 1h 4h 1d   # mainnet history -> data/cache
+hl-agent validate strategies/compass                        # dry-run every scanner
+hl-agent backtest strategies/compass --start 2026-04-01 --out compass-q2
+hl-agent walkforward strategies/compass --folds 3
+hl-agent report compass-q2 --json                           # metrics from runs/<name>
+```
+
+Live (testnet by default — set `[network] name = "mainnet"` **and** pass
+`--i-accept-real-money` for real funds):
+
+```bash
+set HL_AGENT_PRIVATE_KEY=0x...     # agent-wallet key, never stored on disk
+hl-agent status                    # account snapshot for [account].address
+hl-agent run strategies/compass --name compass-live --interval 60
+hl-agent stop compass-live         # kill switch: the agent flattens on its next tick
+hl-agent report compass-live
+```
+
+Backtest and live share one engine; a run directory (`runs/<name>/`) always holds
+`events.jsonl`, `equity.jsonl` and, for backtests, `metrics.json`.
 
 ## Dev
 

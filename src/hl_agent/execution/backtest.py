@@ -106,6 +106,7 @@ def run(
     if flatten_at_end:
         events.extend(engine.close_all(end_ms, CloseReason.MANUAL_CLOSE))
     final = broker.account()
+    equity.append(EquityPoint(end_ms, final.account_value))  # the flattened, fee-paid value
     src.now_ms = now  # a second ``run`` on the same setup resumes at the next tick
     return BacktestResult(
         strategy=setup.package.spec.name,

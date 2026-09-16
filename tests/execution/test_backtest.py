@@ -20,7 +20,9 @@ def test_backtest_is_cash_consistent_and_flattens(store: CandleStore) -> None:
         end_ms=599 * H,
         env=ENV,
     )
-    assert res.strategy.startswith("pendulum") and len(res.equity) == 250
+    assert (
+        res.strategy.startswith("pendulum") and len(res.equity) == 251
+    )  # 250 ticks + the flattened close
     kinds = {e.kind for e in res.events}
     assert "opened" in kinds and "closed" in kinds
     assert res.final_account.positions == ()  # flattened
@@ -59,5 +61,5 @@ def test_prepare_then_run_is_resumable(store: CandleStore) -> None:
     assert isinstance(setup.source, ReplaySource) and setup.source.now_ms == 350 * H
     first = run(setup, end_ms=450 * H, flatten_at_end=False)
     second = run(setup, end_ms=599 * H)
-    assert len(first.equity) == 101 and second.start_ms == 451 * H
-    assert len(second.equity) == 149 and second.final_account.positions == ()
+    assert len(first.equity) == 102 and second.start_ms == 451 * H
+    assert len(second.equity) == 150 and second.final_account.positions == ()
