@@ -8,6 +8,7 @@ is injected as a callable.
 
 from __future__ import annotations
 
+import bisect
 from collections.abc import Callable, Mapping, Sequence
 
 from hl_agent.data.history import CandleStore
@@ -28,6 +29,7 @@ class ReplaySource:
         self._account = account
         self._price_interval = price_interval
         self._cache: dict[tuple[str, str], list[Candle]] = {}
+        self._closes: dict[tuple[str, str], list[int]] = {}  # close_ms, ascending, for bisect
         self.now_ms = 0
 
     @property
@@ -38,14 +40,21 @@ class ReplaySource:
         key = (asset, interval)
         if key not in self._cache:
             self._cache[key] = self._store.load(asset, interval)
+            self._closes[key] = [c.close_ms for c in self._cache[key]]
         return self._cache[key]
+
+    def _closed_before(self, asset: str, interval: str, at_ms: int) -> int:
+        """Count of bars closed at or before ``at_ms`` (the series is sorted by open_ms and
+        bars do not overlap, so close_ms is sorted too)."""
+        series = self._series(asset, interval)
+        return bisect.bisect_right(self._closes[(asset, interval)], at_ms) if series else 0
 
     # ---- MarketSource ---------------------------------------------------------------
 
     def candles(self, asset: str, interval: str, limit: int) -> Sequence[Candle]:
         series = self._series(asset, interval)
-        closed = [c for c in series if c.close_ms <= self.now_ms]
-        return closed[-limit:] if limit > 0 else closed
+        n = self._closed_before(asset, interval, self.now_ms)
+        return series[max(0, n - limit) : n] if limit > 0 else series[:n]
 
     def price(self, asset: str) -> float | None:
         """Last close at or before the clock — the mark price a replay can honestly claim."""
@@ -57,11 +66,9 @@ class ReplaySource:
         px = self.price(asset)
         if inst is None or px is None:
             return None
-        day_ago = [
-            c
-            for c in self._series(asset, self._price_interval)
-            if c.close_ms <= self.now_ms - 86_400_000
-        ]
+        series = self._series(asset, self._price_interval)
+        n_day_ago = self._closed_before(asset, self._price_interval, self.now_ms - 86_400_000)
+        prev_day = series[n_day_ago - 1].close if n_day_ago else px
         return AssetContext(
             instrument=inst,
             mark_price=px,
@@ -71,7 +78,7 @@ class ReplaySource:
             day_notional_volume=sum(
                 c.volume * c.close for c in self.candles(asset, self._price_interval, 24)
             ),
-            prev_day_price=day_ago[-1].close if day_ago else px,
+            prev_day_price=prev_day,
         )
 
     def instruments(self, dex: str = "") -> Sequence[Instrument]:
