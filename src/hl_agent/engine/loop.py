@@ -96,12 +96,26 @@ class Engine:
                 account = self._market.account()  # margin moved; size the next one honestly
         return events
 
+    def close_all(self, now_ms: int, reason: CloseReason = CloseReason.MANUAL_CLOSE) -> list[Event]:
+        """Flatten every tracked position (kill switch, end of a backtest)."""
+        events: list[Event] = []
+        for asset in list(self._positions):
+            fill = self._broker.close(asset, reason, now_ms)
+            self._forget(asset, reason, fill.price, fill.fee_usd, now_ms, events)
+        return events
+
     # ---- 1. reconcile ------------------------------------------------------------
 
     def _reconcile(self, account: AccountState, now_ms: int, events: list[Event]) -> None:
         for asset in list(self._positions):
             venue = account.position(asset)
-            if venue is None or venue.size <= 0:
+            if venue is not None and venue.size > 0:
+                continue
+            known = self._broker.external_close(asset, now_ms)
+            if known is not None:
+                reason, fill = known
+                self._forget(asset, reason, fill.price, fill.fee_usd, fill.time_ms, events)
+            else:
                 price = self._market.price(asset) or self._positions[asset].dsl.entry_price
                 self._forget(asset, CloseReason.CLOSED_EXTERNALLY, price, 0.0, now_ms, events)
 

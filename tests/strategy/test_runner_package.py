@@ -197,6 +197,9 @@ def test_package_drives_engine_end_to_end(replay: ReplaySource, tmp_path: Path) 
         def set_stop(self, a: str, stop: float, now_ms: int) -> None:
             pass
 
+        def external_close(self, asset: str, now_ms: int) -> tuple[CloseReason, Fill] | None:
+            return None
+
     paper = Paper()
     replay._account = paper.account  # the replay's clearinghouse view is the paper wallet
     pkg = load_package(STRATEGIES / "pendulum", replay, freeze_time=True, env={"HL_WALLET": "0x"})

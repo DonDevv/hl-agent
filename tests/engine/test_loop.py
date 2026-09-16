@@ -72,6 +72,9 @@ class FakeVenue:
     def set_stop(self, asset: str, stop_price: float, now_ms: int) -> None:
         self.stops[asset] = stop_price
 
+    def external_close(self, asset: str, now_ms: int) -> tuple[CloseReason, Fill] | None:
+        return None
+
 
 class Queue:
     def __init__(self) -> None:

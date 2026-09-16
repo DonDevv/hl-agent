@@ -30,6 +30,10 @@ class ReplaySource:
         self._cache: dict[tuple[str, str], list[Candle]] = {}
         self.now_ms = 0
 
+    @property
+    def price_interval(self) -> str:
+        return self._price_interval
+
     def _series(self, asset: str, interval: str) -> list[Candle]:
         key = (asset, interval)
         if key not in self._cache:
