@@ -19,12 +19,14 @@ from hl_agent.execution.live import (
 )
 from hl_agent.execution.runner import LiveRunner, LoopConfig, RefusedError, check_network
 from hl_agent.execution.sim import SimBroker, SimConfig
+from hl_agent.execution.walkforward import Fold, WalkForward, split, walk_forward
 
 __all__ = [
     "BacktestResult",
     "BacktestSetup",
     "BrokerError",
     "EquityPoint",
+    "Fold",
     "HlBroker",
     "LiveMarketSource",
     "LiveRunner",
@@ -33,6 +35,7 @@ __all__ = [
     "RefusedError",
     "SimBroker",
     "SimConfig",
+    "WalkForward",
     "check_network",
     "load_address",
     "load_signer",
@@ -40,4 +43,6 @@ __all__ = [
     "round_price",
     "run",
     "run_backtest",
+    "split",
+    "walk_forward",
 ]
