@@ -1,0 +1,99 @@
+# ── PENDULUM · 1h RSI mean reversion ──
+# Fade a stretched move: LONG when RSI(14) is oversold and the last bar closes back up,
+# SHORT mirror. Tight floor, quick ladder, hard cap on holding time — a fade that does not
+# revert fast is wrong.
+name: pendulum-main
+group: pendulum
+version: 1.0.0
+description: >
+  PENDULUM — 1h mean reversion. Waits for RSI(14) to reach an extreme, then requires
+  the first bar closing back toward the mean before entering against the stretch.
+  Small, frequent, short-lived trades; the DSL cuts anything that lingers.
+
+strategy:
+  wallet: "${HL_WALLET}"
+  slots: 2
+  margin_pct: 15
+  default_leverage: 2
+  trading_risk: conservative
+  enabled: true
+
+scanners:
+  - name: position_tracker
+    type: position_tracker
+    interval_seconds: 10
+  - name: pendulum_signals
+    type: external_scanner
+    path: ./scanners
+    entrypoint: scan.py
+    interval_seconds: 300
+    timeout_seconds: 60
+    default_signal_validity_seconds: 900
+    state_history_max_count: 50
+    inputs:
+      assets: ["BTC", "ETH", "SOL"]
+      interval: "1h"
+      rsiPeriod: 14
+      oversold: 30
+      overbought: 70
+      marginPct: 15
+      leverage: 2
+    signal_data_schema:
+      score: { type: number }
+      direction: { type: string }
+      rsi: { type: number }
+      reasons: { type: array, required: false }
+      barTime: { type: number, required: false }
+
+actions:
+  - name: position_tracker_action
+    action_type: POSITION_TRACKER
+    decision_mode: rule
+    scanners: [position_tracker]
+  - name: pendulum_entry
+    action_type: OPEN_POSITION
+    decision_mode: rule
+    scanners: [pendulum_signals]
+    params:
+      order_type: FEE_OPTIMIZED_LIMIT
+      fee_optimized_limit_options:
+        ensure_execution_as_taker: true
+        execution_timeout_seconds: 60
+
+exit:
+  engine: dsl
+  interval_seconds: 60
+  dsl_preset:
+    hard_timeout:
+      enabled: true
+      interval_in_minutes: 1440          # 24h — a fade that has not reverted is wrong
+    weak_peak_cut:
+      enabled: true
+      interval_in_minutes: 360
+      min_value: 2.0
+    dead_weight_cut:
+      enabled: true
+      interval_in_minutes: 240           # 4h under water without a positive tick → cut
+    phase1:
+      enabled: false
+      max_loss_pct: 8.0
+      retrace_threshold: 8.0
+      consecutive_breaches_required: 1
+    phase2:
+      enabled: true
+      tiers:
+        - { trigger_pct: 6, lock_hw_pct: 40 }
+        - { trigger_pct: 12, lock_hw_pct: 60 }
+        - { trigger_pct: 25, lock_hw_pct: 80 }
+
+risk:
+  data_retention_seconds: 604800
+  guard_rails:
+    daily_loss_limit_pct: 6
+    max_entries_per_day: 8
+    bypass_max_entries_per_day_on_profit: true
+    max_consecutive_losses: 4
+    cooldown_seconds: 3600
+    drawdown_halt_pct: 15
+    drawdown_reset_on_day_rollover: false
+    per_asset_cooldown_seconds: 3600

@@ -20,8 +20,10 @@ class Tier:
     lock_hw_pct: float  # % of high-water ROE protected once armed
 
     def __post_init__(self) -> None:
-        if self.trigger_pct <= 0 or self.trigger_pct > 100:
-            raise ConfigError(f"tier trigger_pct must be in (0, 100], got {self.trigger_pct}")
+        # The docs say (0, 100] but the catalog ships triggers up to 300% ROE; the fleet
+        # runtime accepts them, so we do too.
+        if self.trigger_pct <= 0:
+            raise ConfigError(f"tier trigger_pct must be > 0, got {self.trigger_pct}")
         if self.lock_hw_pct <= 0 or self.lock_hw_pct > 100:
             # Senpi: a breakeven lock (0) exits flat and still pays fees — forbidden.
             raise ConfigError(f"tier lock_hw_pct must be in (0, 100], got {self.lock_hw_pct}")

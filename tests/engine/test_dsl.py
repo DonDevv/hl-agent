@@ -219,7 +219,6 @@ def test_config_rejects_unsorted_tiers_and_zero_lock() -> None:
         DslConfig(phase1=Phase1(8), tiers=(Tier(20, 30), Tier(10, 30)))
     with pytest.raises(ConfigError):
         Tier(10, 0)
-    with pytest.raises(ConfigError):
-        Tier(150, 90)  # Senpi's parser caps trigger_pct at 100
+    Tier(300, 92)  # catalog strategies ladder well past +100% ROE
     with pytest.raises(ConfigError):
         DslConfig(phase1=Phase1(8), weak_peak_cut=TimeCut(enabled=True, interval_minutes=10))
