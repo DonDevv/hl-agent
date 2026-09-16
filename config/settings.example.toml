@@ -1,0 +1,20 @@
+# Copy to config/settings.toml (git-ignored). Secrets stay in environment variables.
+
+[network]
+name = "testnet"            # "testnet" | "mainnet"
+
+[account]
+# Address of the main wallet (the one holding funds). The signing key is the
+# AGENT key (trading-only, no withdraw rights) and is read from HL_AGENT_PRIVATE_KEY.
+address = "0x0000000000000000000000000000000000000000"
+
+[risk]
+max_leverage = 3            # hard global cap, overrides any strategy value above it
+min_notional_usd = 10.0     # Hyperliquid venue minimum
+
+[fees]
+taker_pct = 0.035
+maker_pct = 0.010
+
+[data]
+cache_dir = "data/cache"
