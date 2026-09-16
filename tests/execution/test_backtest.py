@@ -63,3 +63,18 @@ def test_prepare_then_run_is_resumable(store: CandleStore) -> None:
     second = run(setup, end_ms=599 * H)
     assert len(first.equity) == 102 and second.start_ms == 451 * H
     assert len(second.equity) == 150 and second.final_account.positions == ()
+
+
+def test_off_grid_start_snaps_to_the_bar_grid(store: CandleStore) -> None:
+    """A tick at hh:51 would price off a bar 51 minutes stale while scanners already see
+    fresher sub-hourly bars: that is look-ahead, so ticks always sit on step boundaries."""
+    res = run_backtest(
+        STRATEGIES / "pendulum",
+        store,
+        INSTRUMENTS,
+        start_ms=350 * H + 1234,
+        end_ms=360 * H,
+        env=ENV,
+    )
+    assert res.start_ms == 351 * H and res.equity[0].time_ms == 351 * H
+    assert all(p.time_ms % H == 0 for p in res.equity)

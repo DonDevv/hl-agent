@@ -92,7 +92,7 @@ def run(
     flatten_at_end: bool = True,
 ) -> BacktestResult:
     src, broker, engine = setup.source, setup.broker, setup.engine
-    start_ms = src.now_ms
+    start_ms = -(-src.now_ms // step_ms) * step_ms  # ticks on the bar grid, never off it
     initial = broker.cash
     events: list[Event] = []
     equity: list[EquityPoint] = []

@@ -110,6 +110,7 @@ def test_event_log_round_trip_and_torn_tail(tmp_path: Path) -> None:
 
 def test_walk_forward_splits_and_scores(store: CandleStore) -> None:
     assert split(0, 99, 4) == [(0, 24), (25, 49), (50, 74), (75, 99)]
+    assert split(0, 99, 4, step_ms=10) == [(0, 29), (30, 49), (50, 79), (80, 99)]
     with pytest.raises(ValueError):
         split(10, 10, 1)
     wf = walk_forward(

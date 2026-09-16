@@ -48,14 +48,15 @@ class WalkForward:
         return max((f.metrics.drawdown.max_pct for f in self.folds), default=0.0)
 
 
-def split(start_ms: int, end_ms: int, folds: int) -> list[tuple[int, int]]:
-    if folds < 1 or end_ms <= start_ms:
-        raise ValueError("need at least one fold and a non-empty window")
+def split(start_ms: int, end_ms: int, folds: int, step_ms: int = 1) -> list[tuple[int, int]]:
+    """Consecutive folds whose starts sit on a ``step_ms`` grid, so a fold's ticks never drift
+    off the bar boundaries (a tick at hh:51 would price off a bar 51 minutes stale while the
+    scanner already sees fresher 15m bars: look-ahead)."""
+    if folds < 1 or end_ms <= start_ms or step_ms < 1:
+        raise ValueError("need at least one fold, a non-empty window and a positive step")
     width = (end_ms - start_ms + 1) // folds
-    return [
-        (start_ms + i * width, end_ms if i == folds - 1 else start_ms + (i + 1) * width - 1)
-        for i in range(folds)
-    ]
+    starts = [-(-(start_ms + i * width) // step_ms) * step_ms for i in range(folds)]
+    return [(a, end_ms if i == folds - 1 else starts[i + 1] - 1) for i, a in enumerate(starts)]
 
 
 def walk_forward(
@@ -74,7 +75,7 @@ def walk_forward(
     env: dict[str, str] | None = None,
 ) -> WalkForward:
     out: list[Fold] = []
-    for i, (a, b) in enumerate(split(start_ms, end_ms, folds)):
+    for i, (a, b) in enumerate(split(start_ms, end_ms, folds, step_ms)):
         res = run_backtest(
             package_path,
             store,
