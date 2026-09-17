@@ -84,7 +84,7 @@ A Senpi-style, light-only phone dashboard that covers the whole project, in five
 
 - **Home** — balance, equity curve (1D/7D/ALL), open perps, live agents with a **Stop** /
   **Clear STOP** button (the `STOP` file the runner honours), latest results.
-- **Strategies** — every package found in `[web] strategy_dirs` (local + the Senpi
+- **Strategies** — every package found in `[data] strategy_dirs` (local + the Senpi
   checkout), searchable; a sheet shows the card, recipe and past runs, and launches
   **Validate**, **Backtest**, **Walk-forward** or **Go live** with a form.
 - **Runs** — every `runs/` entry, walk-forward folds grouped under their parent; stats,

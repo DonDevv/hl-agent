@@ -21,6 +21,8 @@ cache_dir = "data/cache"
 # Extra HIP-3 dexs to trade (main dex is always on). Mainnet: ["xyz"] for equities.
 # Keep empty on testnet: it hosts hundreds of test dexs and listing them all hits rate limits.
 dexs = []
+# Where the dashboard looks for strategy packages (any dir holding a runtime.yaml, depth 3).
+strategy_dirs = ["strategies", "config/strategies"]
 
 [web]
 # `hl-agent web`: bind address / port; token gates every API call when set
@@ -28,5 +30,3 @@ dexs = []
 host = "127.0.0.1"
 port = 8080
 token = ""
-# Where the dashboard looks for strategy packages (any dir holding a runtime.yaml, depth 3).
-strategy_dirs = ["strategies", "config/strategies"]

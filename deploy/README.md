@@ -39,5 +39,5 @@ Since the dashboard can also launch backtests, walk-forwards, fetches and live r
 subprocesses of the `hl-agent-web` service, it needs the same `/etc/hl-agent/env`
 (already the case in `hl-agent-web.service`) and the `hl` user must be able to write
 `runs/` and the data cache. If you keep the Senpi checkout on the box, add its path to
-`[web] strategy_dirs` in `settings.toml`. A live run started from the phone is a child of
+`[data] strategy_dirs` in `settings.toml`. A live run started from the phone is a child of
 the web service: `systemctl restart hl-agent-web` kills it (a Stop first is cleaner).
