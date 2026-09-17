@@ -155,12 +155,12 @@ def test_without_token_everything_is_open(env: dict[str, Any]) -> None:
 
 def test_static_shell_and_pwa_files(env: dict[str, Any]) -> None:
     c = TestClient(make_app(env))
-    assert "<title>hl-agent</title>" in c.get("/").text
+    assert "<title>俺び寂び</title>" in c.get("/").text
     m = c.get("/manifest.webmanifest")
     assert m.headers["content-type"].startswith("application/manifest+json")
     assert m.json()["display"] == "standalone"
     assert "javascript" in c.get("/sw.js").headers["content-type"]
-    for f in ("app.js", "app.css", "icon.svg", "icon-180.png", "icon-512.png"):
+    for f in ("app.js", "app.css", "logo.png", "favicon.png", "icon-180.png", "icon-512.png"):
         assert c.get(f"/static/{f}").status_code == 200, f
 
 

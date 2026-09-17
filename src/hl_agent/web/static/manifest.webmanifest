@@ -1,6 +1,6 @@
 {
-  "name": "hl-agent",
-  "short_name": "hl-agent",
+  "name": "俺び寂び",
+  "short_name": "俺び寂び",
   "description": "Tableau de bord de l’agent de trading Hyperliquid",
   "lang": "fr",
   "start_url": "/",
@@ -10,8 +10,7 @@
   "background_color": "#ffffff",
   "theme_color": "#ffffff",
   "icons": [
-    { "src": "/static/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" },
-    { "src": "/static/icon-180.png", "sizes": "180x180", "type": "image/png", "purpose": "any" },
-    { "src": "/static/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
+    { "src": "/static/icon-180.png?v=4", "sizes": "180x180", "type": "image/png", "purpose": "any" },
+    { "src": "/static/icon-512.png?v=4", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
   ]
 }

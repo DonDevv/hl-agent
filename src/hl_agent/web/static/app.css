@@ -55,7 +55,7 @@ a { color: var(--primary); text-decoration: none; }
   background: var(--bg);
 }
 .brand { display: flex; align-items: center; gap: 8px; font-weight: 700; font-size: 17px; }
-.brand img { border-radius: 8px; }
+.brand img { height: 30px; width: auto; display: block; }
 .top-right { display: flex; align-items: center; gap: 8px; }
 
 .pill {
