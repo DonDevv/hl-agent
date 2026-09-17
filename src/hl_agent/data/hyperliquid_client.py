@@ -41,6 +41,8 @@ INTERVAL_MS: dict[Interval, int] = {
 }
 
 _CANDLE_PAGE = 5000  # server-side cap per candleSnapshot request
+_RETRIES = 3  # on HTTP 429 only; exponential backoff unless the server says Retry-After
+_BACKOFF_S = 1.0
 
 
 def split_asset(asset: str) -> tuple[str, str]:
@@ -55,8 +57,10 @@ class HyperliquidClient:
         base_url: str = MAINNET_URL,
         timeout_s: float = 15.0,
         transport: httpx.BaseTransport | None = None,
+        sleep: Any = time.sleep,
     ) -> None:
         self._http = httpx.Client(base_url=base_url, timeout=timeout_s, transport=transport)
+        self._sleep = sleep
 
     def close(self) -> None:
         self._http.close()
@@ -70,9 +74,14 @@ class HyperliquidClient:
     # ---- low level ---------------------------------------------------------
 
     def _info(self, payload: dict[str, Any]) -> Any:
-        resp = self._http.post("/info", json=payload)
-        resp.raise_for_status()
-        return resp.json()
+        for attempt in range(_RETRIES + 1):
+            resp = self._http.post("/info", json=payload)
+            if resp.status_code != 429 or attempt == _RETRIES:
+                resp.raise_for_status()
+                return resp.json()
+            retry_after = resp.headers.get("Retry-After")
+            self._sleep(float(retry_after) if retry_after else _BACKOFF_S * 2**attempt)
+        raise AssertionError("unreachable")
 
     # ---- instruments -------------------------------------------------------
 

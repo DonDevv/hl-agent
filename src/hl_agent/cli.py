@@ -81,6 +81,7 @@ class Settings:
     taker_pct: float = 0.035
     cache_dir: Path = Path("data/cache")
     runs_dir: Path = Path("runs")
+    dexs: tuple[str, ...] = ()  # extra HIP-3 dexs to load ("xyz", ...); main dex is implicit
 
     @classmethod
     def load(cls, path: Path | None) -> Settings:
@@ -104,6 +105,7 @@ class Settings:
             taker_pct=float(fees.get("taker_pct", 0.035)),
             cache_dir=Path(data.get("cache_dir", "data/cache")),
             runs_dir=Path(data.get("runs_dir", "runs")),
+            dexs=tuple(str(d) for d in data.get("dexs", []) if d),
         )
 
 
@@ -390,9 +392,9 @@ class Venue:
 
 
 def build_venue(s: Settings, address: str, *, trading: bool) -> Venue:
-    with HyperliquidClient(s.network.url) as probe:
-        dexs = ["", *probe.perp_dexs()]
-    market = LiveMarketSource(HyperliquidClient(s.network.url), address, dexs=dexs)
+    # Dexs are an explicit allow-list: testnet has hundreds of throwaway HIP-3 dexs and
+    # enumerating them all (one ``meta`` call each) trips the rate limit immediately.
+    market = LiveMarketSource(HyperliquidClient(s.network.url), address, dexs=("", *s.dexs))
     if not trading:
         return Venue(market)
     from hyperliquid.exchange import Exchange  # type: ignore[import-untyped]

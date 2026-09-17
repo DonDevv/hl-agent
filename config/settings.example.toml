@@ -18,3 +18,6 @@ maker_pct = 0.010
 
 [data]
 cache_dir = "data/cache"
+# Extra HIP-3 dexs to trade (main dex is always on). Mainnet: ["xyz"] for equities.
+# Keep empty on testnet: it hosts hundreds of test dexs and listing them all hits rate limits.
+dexs = []

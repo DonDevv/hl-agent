@@ -27,7 +27,7 @@ def settings(tmp_path: Path, store: CandleStore, monkeypatch: pytest.MonkeyPatch
         "[network]\nname = 'testnet'\n"
         f"[account]\naddress = '{ADDR}'\n"
         "[risk]\nmax_leverage = 5\n"
-        f"[data]\ncache_dir = '{cache.as_posix()}'\n"
+        f"[data]\ncache_dir = '{cache.as_posix()}'\ndexs = ['xyz']\n"
         f"runs_dir = '{(tmp_path / 'runs').as_posix()}'\n",
         encoding="utf-8",
     )
@@ -46,6 +46,7 @@ def test_settings_and_dates(tmp_path: Path, settings: Path) -> None:
     assert cli.Settings.load(None).network is Network.TESTNET  # no file: defaults
     s = cli.Settings.load(settings)
     assert s.address == ADDR and s.max_leverage == 5  # settings may raise the cap...
+    assert s.dexs == ("xyz",) and cli.Settings.load(None).dexs == ()
     (tmp_path / "wild.toml").write_text("[risk]\nmax_leverage = 50\n", encoding="utf-8")
     assert cli.Settings.load(tmp_path / "wild.toml").max_leverage == 10  # ...up to 10x, no more
     (tmp_path / "bad.toml").write_text("[network]\nname = 'moon'\n", encoding="utf-8")
@@ -149,6 +150,22 @@ def test_fetch_uses_mainnet_history(
     assert store.first_open_ms("BTC", "1h") == 0
     code, _ = run_cli("--settings", str(settings), "fetch", "--assets", "DOGE", capsys=capsys)
     assert code == 2
+
+
+def test_build_venue_only_loads_configured_dexs(
+    settings: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from tests.conftest import FakeInfoTransport
+
+    transport = FakeInfoTransport()
+    monkeypatch.setattr(
+        cli, "HyperliquidClient", lambda url: HyperliquidClient(base_url=url, transport=transport)
+    )
+    venue = cli.build_venue(cli.Settings.load(settings), ADDR, trading=False)
+    venue.market.refresh(1_700_000_000_000)
+    metas = [c.get("dex", "") for c in transport.calls if c["type"] == "meta"]
+    assert metas == ["", "xyz"]  # no perpDexs enumeration: testnet lists hundreds of them
+    assert not any(c["type"] == "perpDexs" for c in transport.calls)
 
 
 def test_status_stop_and_run(

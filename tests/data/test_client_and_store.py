@@ -88,3 +88,32 @@ def test_store_sync_resumes_from_last_bar(
     assert added_again == 0
     resumed_start = transport.calls[-1]["req"]["startTime"]
     assert resumed_start == store.last_open_ms("BTC", "1h")
+
+
+def test_info_backs_off_on_429_then_gives_up() -> None:
+    import httpx
+    import pytest
+
+    hits: list[int] = []
+    naps: list[float] = []
+
+    def flaky(request: httpx.Request) -> httpx.Response:
+        hits.append(1)
+        if len(hits) < 3:
+            return httpx.Response(429, headers={"Retry-After": "2"})
+        return httpx.Response(200, json={"BTC": "1.0"})
+
+    c = HyperliquidClient(
+        base_url="https://fake.test", transport=httpx.MockTransport(flaky), sleep=naps.append
+    )
+    assert c.all_mids() == {"BTC": 1.0} and len(hits) == 3 and naps == [2.0, 2.0]
+
+    hits.clear()
+    always = HyperliquidClient(
+        base_url="https://fake.test",
+        transport=httpx.MockTransport(lambda r: httpx.Response(429)),
+        sleep=naps.append,
+    )
+    with pytest.raises(httpx.HTTPStatusError):
+        always.all_mids()
+    assert naps[2:] == [1.0, 2.0, 4.0]  # exponential when the server gives no hint
