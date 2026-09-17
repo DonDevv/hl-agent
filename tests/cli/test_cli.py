@@ -115,6 +115,14 @@ def test_validate_backtest_report_walkforward(
     assert code == 0 and "fold0" in out and "fold1" in out and "profitable folds" in out
     assert (runs / "wf" / "fold1" / "events.jsonl").exists()
 
+    # run.json tells the dashboard what each directory is
+    bt_meta = json.loads((runs / "bt1" / "run.json").read_text(encoding="utf-8"))
+    assert bt_meta["kind"] == "backtest" and bt_meta["strategy"] == "pendulum-main"
+    assert bt_meta["package"] == str(STRATEGIES / "pendulum")
+    assert bt_meta["window"] == [350 * H, 599 * H] and bt_meta["cash"] > 0
+    wf_meta = json.loads((runs / "wf" / "fold1" / "run.json").read_text(encoding="utf-8"))
+    assert wf_meta["kind"] == "walkforward" and wf_meta["window"][0] > 350 * H
+
 
 def test_fetch_uses_mainnet_history(
     tmp_path: Path,

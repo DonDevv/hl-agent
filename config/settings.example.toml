@@ -28,3 +28,5 @@ dexs = []
 host = "127.0.0.1"
 port = 8080
 token = ""
+# Where the dashboard looks for strategy packages (any dir holding a runtime.yaml, depth 3).
+strategy_dirs = ["strategies", "config/strategies"]

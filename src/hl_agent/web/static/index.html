@@ -4,8 +4,8 @@
 <meta charset="utf-8">
 <title>hl-agent</title>
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
-<meta name="theme-color" content="#08080c" media="(prefers-color-scheme: dark)">
+<meta name="color-scheme" content="light only">
+<meta name="theme-color" content="#ffffff">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <meta name="apple-mobile-web-app-title" content="hl-agent">
@@ -15,7 +15,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600;9..40,700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="/static/app.css">
+<link rel="stylesheet" href="/static/app.css?v=2">
 </head>
 <body>
 <div id="app">
@@ -25,11 +25,13 @@
       <span>hl-agent</span>
     </div>
     <div class="top-right">
+      <span id="jobs-dot" class="pill pill-blue hidden" title="jobs running">…</span>
       <span id="net" class="pill pill-muted">…</span>
       <span id="key-dot" class="dot dot-muted" title="agent key"></span>
     </div>
   </header>
 
+  <!-- HOME -->
   <main id="view-home" class="view">
     <section class="balance">
       <div class="label">Total balance</div>
@@ -56,75 +58,123 @@
     </section>
 
     <section>
-      <div class="section-label">Agent</div>
-      <div class="card" id="agent"><div class="empty">No run yet</div></div>
+      <div class="section-label">Live agents</div>
+      <div class="card list" id="live-runs"><div class="empty">No live run</div></div>
+    </section>
+
+    <section>
+      <div class="section-label">Latest results</div>
+      <div class="card list" id="recent-runs"><div class="empty">No backtest yet</div></div>
     </section>
   </main>
 
+  <!-- STRATEGIES -->
+  <main id="view-strategies" class="view hidden">
+    <h1>Strategies</h1>
+    <div class="search-row">
+      <input id="strat-search" type="search" placeholder="Search name, tag, asset…" autocomplete="off">
+    </div>
+    <div class="chips" id="strat-filters">
+      <button data-f="all" class="on">All</button>
+      <button data-f="local">Local</button>
+      <button data-f="senpi">Senpi</button>
+      <button data-f="tested">Tested</button>
+    </div>
+    <div class="card list" id="strategies"><div class="empty">Loading…</div></div>
+  </main>
+
+  <!-- RUNS -->
+  <main id="view-runs" class="view hidden">
+    <h1>Runs</h1>
+    <div class="search-row">
+      <input id="run-search" type="search" placeholder="Search runs…" autocomplete="off">
+    </div>
+    <div class="chips" id="run-filters">
+      <button data-f="all" class="on">All</button>
+      <button data-f="live">Live</button>
+      <button data-f="backtest">Backtest</button>
+      <button data-f="walkforward">Walk-forward</button>
+    </div>
+    <div class="card list" id="runs"><div class="empty">No run yet</div></div>
+  </main>
+
+  <!-- TRADERS -->
   <main id="view-traders" class="view hidden">
-    <section class="head-row">
-      <div>
-        <div class="label">Copy-trading</div>
-        <div class="h2">Traders</div>
-      </div>
-      <button class="btn btn-light" id="traders-refresh">Refresh</button>
-    </section>
-    <div class="muted small" id="traders-meta">Leaderboard blend: 7d ROI · 30d ROI · 30d PnL</div>
+    <div class="row-between">
+      <h1>Traders</h1>
+      <button class="btn btn-small" id="refresh-traders">Refresh</button>
+    </div>
+    <p class="hint" id="traders-hint">Leaderboard filtered for copyability at your budget.</p>
     <div class="card list" id="traders"><div class="empty">Loading…</div></div>
   </main>
 
-  <main id="view-activity" class="view hidden">
-    <section class="head-row">
-      <div>
-        <div class="label">Run</div>
-        <div class="h2" id="activity-run">—</div>
-      </div>
-      <select id="run-select" class="select"></select>
-    </section>
-    <div class="stats" id="stats"></div>
-    <div class="section-label">Trades</div>
-    <div class="card list" id="trades"><div class="empty">No closed trade</div></div>
-    <div class="section-label">Events</div>
-    <div class="card list" id="events"><div class="empty">No event</div></div>
-  </main>
+  <!-- MORE -->
+  <main id="view-more" class="view hidden">
+    <h1>More</h1>
 
-  <main id="view-profile" class="view hidden">
-    <section class="balance">
-      <div class="label">Account</div>
-      <div class="mono" id="address">—</div>
+    <section>
+      <div class="row-between">
+        <div class="section-label">Jobs</div>
+        <button class="btn btn-small" id="new-fetch">Fetch data</button>
+      </div>
+      <div class="card list" id="jobs"><div class="empty">No job yet</div></div>
     </section>
-    <div class="card kv" id="profile"></div>
-    <div class="section-label">Install</div>
-    <div class="card">
-      <p class="small">On iPhone: open this page in Safari, tap <b>Share</b> → <b>Add to Home Screen</b>. It then runs full-screen like an app.</p>
-    </div>
-    <div class="section-label">Access</div>
-    <div class="card">
-      <p class="small">Set a token with <code>[web] token</code> or <code>HL_AGENT_WEB_TOKEN</code>, then enter it here.</p>
-      <form id="login" class="row">
-        <input id="token" type="password" placeholder="token" autocomplete="current-password">
-        <button class="btn btn-dark" type="submit">Save</button>
-      </form>
-    </div>
+
+    <section>
+      <div class="section-label">Data cache</div>
+      <div class="card" id="data"><div class="empty">Loading…</div></div>
+    </section>
+
+    <section>
+      <div class="section-label">Agent key</div>
+      <div class="card"><div class="mono" id="agent-key">…</div></div>
+    </section>
+
+    <section>
+      <div class="section-label">Settings</div>
+      <div class="card kv" id="settings"></div>
+    </section>
+
+    <section>
+      <div class="section-label">Access</div>
+      <div class="card">
+        <div class="hint" id="auth-hint"></div>
+        <form id="login" class="row">
+          <input id="token" type="password" placeholder="web token" autocomplete="current-password">
+          <button class="btn btn-dark" type="submit">Sign in</button>
+        </form>
+      </div>
+    </section>
   </main>
 
   <nav class="tabs">
-    <button data-view="home" class="on"><i class="ic ic-home"></i><span>Home</span></button>
-    <button data-view="traders"><i class="ic ic-users"></i><span>Traders</span></button>
-    <button data-view="activity"><i class="ic ic-list"></i><span>Activity</span></button>
-    <button data-view="profile"><i class="ic ic-user"></i><span>Profile</span></button>
+    <button data-view="home" class="on">
+      <svg viewBox="0 0 24 24"><path d="M3 11 12 3l9 8v10h-6v-6H9v6H3z"/></svg><span>Home</span>
+    </button>
+    <button data-view="strategies">
+      <svg viewBox="0 0 24 24"><path d="M4 4h7v7H4zm9 0h7v7h-7zM4 13h7v7H4zm9 0h7v7h-7z"/></svg><span>Strategies</span>
+    </button>
+    <button data-view="runs">
+      <svg viewBox="0 0 24 24"><path d="M3 17l6-6 4 4 8-8v4h-2V9.8l-6 6-4-4L4.4 18.4z"/></svg><span>Runs</span>
+    </button>
+    <button data-view="traders">
+      <svg viewBox="0 0 24 24"><path d="M16 11a4 4 0 1 0-8 0 4 4 0 0 0 8 0zm-4 6c-4 0-8 2-8 4v1h16v-1c0-2-4-4-8-4z"/></svg><span>Traders</span>
+    </button>
+    <button data-view="more">
+      <svg viewBox="0 0 24 24"><circle cx="5" cy="12" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="19" cy="12" r="2"/></svg><span>More</span>
+    </button>
   </nav>
 
-  <div id="sheet" class="sheet hidden">
-    <div class="sheet-bg"></div>
-    <div class="sheet-body">
+  <div id="sheet" class="sheet hidden" role="dialog" aria-modal="true">
+    <div class="sheet-backdrop"></div>
+    <div class="sheet-panel">
       <div class="sheet-handle"></div>
-      <div id="sheet-content"></div>
+      <div id="sheet-body"></div>
     </div>
   </div>
 
   <div id="toast" class="toast hidden"></div>
 </div>
-<script src="/static/app.js"></script>
+<script src="/static/app.js?v=2"></script>
 </body>
 </html>

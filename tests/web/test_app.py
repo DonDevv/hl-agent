@@ -10,14 +10,11 @@ import pytest
 from fastapi import HTTPException
 from fastapi.testclient import TestClient
 
-from hl_agent.data.models import AccountState, Direction, Position
 from hl_agent.engine.loop import Event
-from hl_agent.telemetry.events import EventLog
 from hl_agent.web.app import (
     COOKIE,
     RUN_META,
     STOP_FILE,
-    AccountView,
     TradersCache,
     WebConfig,
     create_app,
@@ -25,9 +22,7 @@ from hl_agent.web.app import (
     run_summary,
     safe_run,
 )
-from tests.copy.test_mirror import FakeFeed, book, pos
 
-L = Direction.LONG
 NOW_S = 1_800_000_000.0
 NOW_MS = int(NOW_S * 1000)
 TRADER = "0x" + "cd" * 20
@@ -64,25 +59,6 @@ def closed(t_ms: int, pnl: float) -> Event:
         "tp",
         {"direction": "LONG", "held_minutes": 30, "pnl_usd": pnl, "roe_pct": pnl, "leverage": 2},
     )
-
-
-@pytest.fixture
-def env(tmp_path: Path) -> dict[str, Any]:
-    runs = tmp_path / "runs"
-    live = write_run(runs, "copy-live", [1000.0, 1010.0, 990.0, 1020.0])
-    log = EventLog(live / "events.jsonl")
-    log.write(Event(NOW_MS - 120_000, "opened", "BTC", "copy", {"margin_usd": 50.0, "leverage": 2}))
-    log.write(closed(NOW_MS - 60_000, 12.0))
-    log.write(closed(NOW_MS, -4.0))
-    stale = write_run(runs, "old", [500.0, 400.0], end_ms=NOW_MS - 86_400_000)
-    (stale / "metrics.json").write_text("{}", encoding="utf-8")
-    eth = Position("ETH", L, 0.1, 3000.0, 3, 100.0, 10.0, 2100.0, 10.0)
-    ours = AccountState(10_000.0, 9_900.0, 100.0, (eth,))
-    prices = {"BTC": 100_000.0, "ETH": 3100.0}
-    view = AccountView(lambda: ours, lambda: prices, lambda: "agent key: 0xabc authorised for x")
-    trader = book(pos("BTC", L, 500, 100_000.0, 5))
-    feed = FakeFeed(trader, prices)
-    return {"runs": runs, "view": view, "feed": feed, "prices": prices, "tmp": tmp_path}
 
 
 def make_app(env: dict[str, Any], *, token: str = "", traders: TradersCache | None = None) -> Any:
@@ -149,11 +125,13 @@ def test_bad_run_names_are_rejected(env: dict[str, Any]) -> None:
     assert c.get("/api/runs/nope/equity").status_code == 404
     assert c.get("/api/runs/nope/equity").json() == {"error": "no run named nope"}
     assert c.post("/api/runs/.hidden/stop").status_code == 400
-    for bad in ("", "..", "a/b", "a" + chr(92) + "b", ".hidden"):
+    for bad in ("", "..", "a/../b", "/a", "a/", "a" + chr(92) + "b", ".hidden", "a/.b"):
         with pytest.raises(HTTPException) as err:
             safe_run(env["runs"], bad)
         assert err.value.status_code == 400
     assert not (env["runs"] / ".hidden").exists()
+    (env["runs"] / "wf" / "fold0").mkdir(parents=True)
+    assert safe_run(env["runs"], "wf/fold0") == env["runs"] / "wf" / "fold0"  # nested runs are fine
 
 
 def test_token_gates_the_api_via_bearer_or_cookie(env: dict[str, Any]) -> None:

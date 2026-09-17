@@ -98,6 +98,7 @@ class Settings:
     cache_dir: Path = Path("data/cache")
     runs_dir: Path = Path("runs")
     dexs: tuple[str, ...] = ()  # extra HIP-3 dexs to load ("xyz", ...); main dex is implicit
+    strategy_dirs: tuple[Path, ...] = (Path("strategies"), Path("config/strategies"))
     web_token: str = ""  # shared secret for `hl-agent web`; env HL_AGENT_WEB_TOKEN overrides
     web_host: str = "127.0.0.1"
     web_port: int = 8080
@@ -126,6 +127,9 @@ class Settings:
             cache_dir=Path(data.get("cache_dir", "data/cache")),
             runs_dir=Path(data.get("runs_dir", "runs")),
             dexs=tuple(str(d) for d in data.get("dexs", []) if d),
+            strategy_dirs=tuple(
+                Path(str(d)) for d in data.get("strategy_dirs", ["strategies", "config/strategies"])
+            ),
             web_token=str(web.get("token", "")),
             web_host=str(web.get("host", "127.0.0.1")),
             web_port=int(web.get("port", 8080)),
@@ -216,13 +220,29 @@ def run_dir(settings: Settings, name: str) -> Path:
     return d
 
 
-def write_run(out: Path, result: BacktestResult, metrics: Metrics) -> None:
+def write_run(
+    out: Path,
+    result: BacktestResult,
+    metrics: Metrics,
+    *,
+    package: Path | None = None,
+    kind: str = "backtest",
+    meta: dict[str, Any] | None = None,
+) -> None:
     (out / "events.jsonl").unlink(missing_ok=True)  # a re-run replaces, never appends
     EventLog(out / "events.jsonl").write_all(result.events)
     with (out / "equity.jsonl").open("w", encoding="utf-8") as fh:
         for p in result.equity:
             fh.write(json.dumps({"time_ms": p.time_ms, "account_value": p.account_value}) + "\n")
     (out / "metrics.json").write_text(to_json(metrics), encoding="utf-8")
+    info = {
+        "kind": kind,
+        "package": str(package) if package else None,
+        "strategy": result.strategy,
+        "started_ms": int(datetime.now(UTC).timestamp() * 1000),
+        **(meta or {}),
+    }
+    (out / "run.json").write_text(json.dumps(info), encoding="utf-8")
 
 
 def read_equity(path: Path) -> list[EquityPoint]:
@@ -349,9 +369,19 @@ def cmd_backtest(args: argparse.Namespace, s: Settings) -> int:
     metrics = from_result(result)
     print(render_text(metrics, title=result.strategy))
     out = run_dir(s, args.out or f"bt-{package.name}-{datetime.now(UTC):%Y%m%d-%H%M%S}")
-    write_run(out, result, metrics)
+    write_run(out, result, metrics, package=package, meta=_bt_meta(args, start, end))
     print(f"written to {out}")
     return 0
+
+
+def _bt_meta(args: argparse.Namespace, start: int, end: int) -> dict[str, Any]:
+    return {
+        "window": [start, end],
+        "cash": args.cash,
+        "step_hours": args.step_hours,
+        "leverage": args.leverage,
+        "assets": args.assets,
+    }
 
 
 def cmd_walkforward(args: argparse.Namespace, s: Settings) -> int:
@@ -383,7 +413,14 @@ def cmd_walkforward(args: argparse.Namespace, s: Settings) -> int:
     if args.out:
         out = run_dir(s, args.out)
         for f in wf.folds:
-            write_run(run_dir(s, f"{args.out}/fold{f.index}"), f.result, f.metrics)
+            write_run(
+                run_dir(s, f"{args.out}/fold{f.index}"),
+                f.result,
+                f.metrics,
+                package=package,
+                kind="walkforward",
+                meta=_bt_meta(args, f.start_ms, f.end_ms),
+            )
         print(f"written to {out}")
     return 0
 
@@ -547,6 +584,7 @@ def cmd_run(args: argparse.Namespace, s: Settings) -> int:
     (out / "run.json").write_text(
         json.dumps(
             {
+                "kind": "live",
                 "package": str(package),
                 "copy": copy_target(args),
                 "network": s.network.value,
@@ -598,6 +636,9 @@ def cmd_web(args: argparse.Namespace, s: Settings) -> int:
         market.refresh(_now_ms())
         return market.account()
 
+    env = dict(os.environ)
+    for var in ("HL_WALLET", "HL_AGENT_ADDRESS", "WALLET"):
+        env.setdefault(var, address)
     cfg = WebConfig(
         network=s.network.value,
         address=address,
@@ -605,6 +646,16 @@ def cmd_web(args: argparse.Namespace, s: Settings) -> int:
         cache_dir=s.cache_dir,
         max_leverage=s.max_leverage,
         token=resolve_token(args.token, s.web_token),
+        strategy_dirs=s.strategy_dirs,
+        settings_path=args.settings,
+        settings={
+            "min_notional_usd": s.min_notional_usd,
+            "taker_pct": s.taker_pct,
+            "dexs": list(s.dexs),
+            "web_host": s.web_host,
+            "web_port": s.web_port,
+        },
+        env=env,
     )
     view = AccountView(account, market.mids, lambda: agent_key_status(s, address))
     app = create_app(cfg, view, mainnet_feed)

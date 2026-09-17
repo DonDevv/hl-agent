@@ -80,11 +80,27 @@ hl-agent web                              # http://127.0.0.1:8080
 hl-agent web --host 0.0.0.0 --token ...   # or HL_AGENT_WEB_TOKEN / [web] token
 ```
 
-A Senpi-style phone dashboard: balance, equity curve, open perps, the agent's status with
-a **Stop** button (writes the `STOP` file the runner honours), the traders leaderboard with
-mirror plans at any budget, trades/events of every run, and the agent-key pre-flight.
-Read-only except the kill switch; secrets are never shown. It reads `runs/<name>/` and
-the account from `/info`, so it runs next to the agent on the same machine.
+A Senpi-style, light-only phone dashboard that covers the whole project, in five tabs:
+
+- **Home** — balance, equity curve (1D/7D/ALL), open perps, live agents with a **Stop** /
+  **Clear STOP** button (the `STOP` file the runner honours), latest results.
+- **Strategies** — every package found in `[web] strategy_dirs` (local + the Senpi
+  checkout), searchable; a sheet shows the card, recipe and past runs, and launches
+  **Validate**, **Backtest**, **Walk-forward** or **Go live** with a form.
+- **Runs** — every `runs/` entry, walk-forward folds grouped under their parent; stats,
+  chart, trades, events and `run.json` info per run.
+- **Traders** — leaderboard filtered for copyability at your budget, mirror plans, and
+  "Copy this trader" (launches `run --copy`).
+- **More** — jobs (one CLI subprocess per launch, log tail, kill), **Fetch data**, the
+  candle cache, agent-key pre-flight, effective settings, and the sign-in form.
+
+Jobs are `python -m hl_agent.cli <cmd>` subprocesses with a whitelisted argv; backtests
+and walk-forwards always get an `--out`, only one live run at a time, and launching a
+live run requires a web token (mainnet additionally needs the consent checkbox, which
+maps to `--i-accept-real-money`). Secrets are never shown. The app reads `runs/<name>/`
+and the account from `/info`, so it runs next to the agent on the same machine. Static
+assets are cache-busted with `?v=N` + the service-worker cache name: bump both when you
+change them.
 
 On an iPhone open it in Safari, Share, **Add to Home Screen**: it then runs full-screen.
 See `deploy/README.md` for the VPS recipe (systemd + Tailscale, no port exposed).
