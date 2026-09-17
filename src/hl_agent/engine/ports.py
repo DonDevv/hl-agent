@@ -39,6 +39,13 @@ class SignalSource(Protocol):
     def signals(self, now_ms: int) -> Sequence[Signal]: ...
 
 
+class ExitSource(Protocol):
+    """A source that can also ask for exits (copy-trading: the mirrored trader closed).
+    Assets the engine does not track are ignored; each request is consumed once."""
+
+    def close_requests(self, now_ms: int) -> Sequence[str]: ...
+
+
 class Broker(Protocol):
     def open(self, plan: OrderPlan, stop_price: float, now_ms: int) -> Fill: ...
     def close(self, asset: str, reason: CloseReason, now_ms: int) -> Fill: ...

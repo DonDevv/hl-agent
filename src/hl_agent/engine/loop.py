@@ -1,8 +1,9 @@
 """The deterministic runtime step, in Senpi's order:
 
 1. **reconcile** — positions the venue no longer shows are ``closed_externally``;
-2. **exits** — every tracked position runs one DSL tick; a close reason closes it,
-   otherwise a moved floor updates the exchange stop;
+2. **exits** — close requests from the source (if it makes any) first, then every tracked
+   position runs one DSL tick; a close reason closes it, otherwise a moved floor updates
+   the exchange stop;
 3. **entries** — signals go through expiry → dedup → slots/held → account gates →
    asset gate → sizing → order; every rejection is emitted with its reason code.
 
@@ -20,7 +21,7 @@ from hl_agent.engine.config import DslConfig, GuardRails, StrategyConfig
 from hl_agent.engine.dedup import DedupState
 from hl_agent.engine.dsl import CloseReason, DslState, roe_pct, stop_price, tick
 from hl_agent.engine.guardrails import GateReason, GuardRailState
-from hl_agent.engine.ports import Broker, Fill, MarketView, SignalSource
+from hl_agent.engine.ports import Broker, ExitSource, Fill, MarketView, SignalSource
 from hl_agent.engine.signals import Signal
 from hl_agent.engine.sizing import OrderPlan, plan_order
 
@@ -63,11 +64,13 @@ class Engine:
         source: SignalSource,
         *,
         now_ms: int,
+        exits: ExitSource | None = None,
     ) -> None:
         self._cfg = cfg
         self._market = market
         self._broker = broker
         self._source = source
+        self._exits = exits
         self._positions: dict[str, Tracked] = {}
         self._rails = GuardRailState.start(now_ms, market.account().account_value)
         self._dedup = DedupState()
@@ -90,6 +93,7 @@ class Engine:
         self._rails = self._rails.observe(self._cfg.rails, now_ms, account.account_value)
 
         self._reconcile(account, now_ms, events)
+        self._run_requested_exits(now_ms, events)
         self._run_exits(now_ms, events)
         for signal in self._source.signals(now_ms):
             if self._try_enter(signal, account, now_ms, events):
@@ -120,6 +124,16 @@ class Engine:
                 self._forget(asset, CloseReason.CLOSED_EXTERNALLY, price, 0.0, now_ms, events)
 
     # ---- 2. exits -----------------------------------------------------------------
+
+    def _run_requested_exits(self, now_ms: int, events: list[Event]) -> None:
+        if self._exits is None:
+            return
+        for asset in self._exits.close_requests(now_ms):
+            if asset in self._positions:
+                fill = self._broker.close(asset, CloseReason.SOURCE_CLOSED, now_ms)
+                self._forget(
+                    asset, CloseReason.SOURCE_CLOSED, fill.price, fill.fee_usd, now_ms, events
+                )
 
     def _run_exits(self, now_ms: int, events: list[Event]) -> None:
         for asset, tracked in list(self._positions.items()):

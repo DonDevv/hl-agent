@@ -6,8 +6,11 @@
     walkforward  the same over N independent folds
     report       metrics from a run dir (backtest or live)
     run          trade live (testnet by default; mainnet needs --i-accept-real-money)
+                 ``--copy 0xTRADER`` mirrors that address instead of running scanners
     status       account snapshot + kill-switch state
     stop         drop the STOP file so a running agent flattens and exits
+    traders      copy-trading candidates from Hyperliquid's public leaderboard
+    mirror-sim   dry-run: what mirroring one address would open at a given budget
 
 Settings come from ``config/settings.toml`` (see ``settings.example.toml``); secrets only
 from the environment (``HL_AGENT_PRIVATE_KEY``, ``HL_AGENT_ADDRESS``).
@@ -22,16 +25,28 @@ import re
 import sys
 import tomllib
 from collections.abc import Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
+from hl_agent.copy.discovery import (
+    MAX_ACCOUNT_VALUE,
+    MAX_ROI,
+    LeaderRow,
+    TraderProfile,
+    blend,
+    fetch_leaderboard,
+    profile,
+    sort_profiles,
+)
+from hl_agent.copy.mirror import CopyConfig, CopySource, MirrorPlan, simulate_mirror
 from hl_agent.data.binance_client import BinanceClient
 from hl_agent.data.history import CandleStore
 from hl_agent.data.hyperliquid_client import HyperliquidClient
 from hl_agent.data.models import AccountState, Instrument
 from hl_agent.engine.loop import Engine, Event
+from hl_agent.engine.ports import SignalSource
 from hl_agent.execution.backtest import HOUR_MS, BacktestResult, EquityPoint, run_backtest
 from hl_agent.execution.live import (
     BrokerError,
@@ -486,7 +501,18 @@ def cmd_run(args: argparse.Namespace, s: Settings) -> int:
         max_leverage=s.max_leverage,
         env=package_env(package, address),
     )
-    engine = Engine(pkg.engine_config, market, broker, pkg.source, now_ms=market.now_ms)
+    cfg = pkg.engine_config
+    source: SignalSource = pkg.source
+    exits: CopySource | None = None
+    label = pkg.spec.name
+    if args.copy:
+        copy = build_copy_source(s, args, market)
+        # The trader may close and re-open the same asset within Senpi's 4 h dedup window;
+        # for a mirror the poll interval is the only sensible dedup horizon.
+        cfg = replace(cfg, dedup_window_ms=copy.cfg.poll_ms)
+        source, exits = ChainSource((pkg.source, copy)), copy
+        label = f"{pkg.spec.name} -> {copy.cfg.target}"
+    engine = Engine(cfg, market, broker, source, now_ms=market.now_ms, exits=exits)
     log = EventLog(out / "events.jsonl")
 
     def sink(e: Event) -> None:
@@ -502,12 +528,152 @@ def cmd_run(args: argparse.Namespace, s: Settings) -> int:
         equity_path=out / "equity.jsonl",
     )
     print(
-        f"{s.network.value} | {pkg.spec.name} | {address} | every {args.interval:.0f}s | "
+        f"{s.network.value} | {label} | {address} | every {args.interval:.0f}s | "
         f"kill switch: {out / STOP_FILE}"
     )
     why = runner.run(max_ticks=args.max_ticks)
     print(f"stopped: {why} after {runner.ticks} ticks, {runner.errors} errors")
     return 0 if why in ("stop_file", "max_ticks") else 1
+
+
+# ---- copy-trading ------------------------------------------------------------------
+
+
+class ChainSource:
+    """Fan several ``SignalSource`` objects into one (package scanners + the mirror)."""
+
+    def __init__(self, sources: Sequence[Any]) -> None:
+        self._sources = tuple(sources)
+
+    def signals(self, now_ms: int) -> Sequence[Any]:
+        out: list[Any] = []
+        for src in self._sources:
+            out.extend(src.signals(now_ms))
+        return out
+
+
+def copy_config(s: Settings, args: argparse.Namespace) -> CopyConfig:
+    return CopyConfig(
+        target=str(args.copy).lower(),
+        budget_usd=args.budget,
+        multiplier=args.multiplier,
+        slippage_pct=args.slippage,
+        max_leverage=s.max_leverage,
+        poll_ms=int(args.poll * 1000),
+        mirror_existing=not args.no_initial,
+    )
+
+
+def mainnet_feed() -> HyperliquidClient:
+    """Traders live on mainnet whatever network we trade on."""
+    return HyperliquidClient(Network.MAINNET.url)
+
+
+def build_copy_source(
+    s: Settings, args: argparse.Namespace, market: LiveMarketSource
+) -> CopySource:
+    return CopySource(mainnet_feed(), copy_config(s, args), market.account)
+
+
+def _fmt_plan(plan: MirrorPlan) -> list[str]:
+    rows = [
+        f"{'asset':<10}{'dir':<6}{'og lev':>7}{'alloc':>8}{'moved':>8}"
+        f"{'lev':>5}{'margin':>9}{'notional':>10}  verdict"
+    ]
+    for ln in plan.lines:
+        moved = "n/a" if ln.moved_from_entry_pct is None else f"{ln.moved_from_entry_pct:.1f}%"
+        rows.append(
+            f"{ln.asset:<10}{ln.direction.value:<6}{ln.og_leverage:>6}x{ln.allocation * 100:>7.1f}%"
+            f"{moved:>8}{ln.leverage:>4}x{ln.margin_usd:>9.2f}{ln.notional_usd:>10.2f}"
+            f"  {ln.verdict}"
+        )
+    fresh = plan.fresh_notional_pct
+    rows.append(
+        f"budget {plan.budget_usd:.2f}  opens {len(plan.to_open)}/{len(plan.lines)}  "
+        f"margin committed {plan.margin_committed_usd:.2f}  min budget for all fresh lines "
+        f"{plan.min_budget_usd:.2f}  scale {plan.scale_factor:.2f}  "
+        f"fresh {'n/a' if fresh is None else f'{fresh:.0f}%'}"
+    )
+    return rows
+
+
+def cmd_mirror_sim(args: argparse.Namespace, s: Settings) -> int:
+    feed = mainnet_feed()
+    state = feed.account_state(args.address.lower())
+    prices = feed.all_mids()
+    budgets = [args.budget if args.budget else 100.0]
+    if budgets[0] != 100.0:
+        budgets.append(100.0)  # always show what the real-money target would copy
+    print(
+        f"{args.address}  equity {state.account_value:,.0f}  margin used "
+        f"{state.total_margin_used:,.0f}  positions {len(state.positions)}"
+    )
+    for budget in budgets:
+        plan = simulate_mirror(
+            state,
+            budget,
+            prices,
+            slippage_pct=args.slippage,
+            multiplier=args.multiplier,
+            max_leverage=s.max_leverage,
+        )
+        print(f"\n== budget {budget:.0f} $ ==")
+        print("\n".join(_fmt_plan(plan)))
+    return 0
+
+
+def _fmt_profile(rank_no: int, p: TraderProfile) -> str:
+    r = p.row
+    fresh = p.plan.fresh_notional_pct
+    return (
+        f"{rank_no:>2} {r.address}  eq {r.account_value:>12,.0f}  "
+        f"7d {r.roi['week'] * 100:>+6.1f}%  30d {r.roi['month'] * 100:>+6.1f}%  "
+        f"pnl30d {r.pnl['month']:>+12,.0f}  pos {p.open_positions:>2} (L{p.longs})  "
+        f"top {p.top_asset_share * 100:>3.0f}%  mu {p.margin_ratio * 100:>3.0f}%  "
+        f"fit {p.fit:<7} fresh {'n/a' if fresh is None else f'{fresh:.0f}%':>4}  "
+        f"opens {len(p.plan.to_open)}/{len(p.plan.lines)}  min$ {p.plan.min_budget_usd:>7.0f}  "
+        f"{','.join(p.seen_in)}  {' '.join(p.flags)}"
+    )
+
+
+def cmd_traders(args: argparse.Namespace, s: Settings) -> int:
+    rows = fetch_leaderboard(s.cache_dir / "leaderboard.json", refresh=args.refresh)
+    by_addr: dict[str, LeaderRow] = {r.address: r for r in rows}
+    seen = blend(
+        rows,
+        top=args.top,
+        min_account_value=args.min_equity,
+        max_account_value=args.max_equity,
+        max_roi=args.max_roi / 100.0,
+    )
+    feed = mainnet_feed()
+    prices = feed.all_mids()
+    profiles: list[TraderProfile] = []
+    for addr, views in seen.items():
+        state = feed.account_state(addr)
+        profiles.append(
+            profile(
+                by_addr[addr],
+                state,
+                prices,
+                budget_usd=args.budget,
+                seen_in=views,
+                slippage_pct=args.slippage,
+                max_leverage=s.max_leverage,
+            )
+        )
+    ranked = sort_profiles(profiles)
+    if not args.all:  # a flat book cannot be mirrored today, whatever the track record
+        ranked = [p for p in ranked if p.open_positions > 0]
+    print(
+        f"{len(rows)} traders on the leaderboard, {len(seen)} candidates "
+        f"(top {args.top} of 7d ROI / 30d ROI / 30d PnL, equity {args.min_equity:,.0f}-"
+        f"{args.max_equity:,.0f}, window ROI 0-{args.max_roi:.0f} %), "
+        f"{len(ranked)} shown, mirror dry-run at {args.budget:.0f} $"
+    )
+    for i, p in enumerate(ranked, 1):
+        print(_fmt_profile(i, p))
+    return 0
 
 
 # ---- parser ------------------------------------------------------------------------
@@ -587,8 +753,37 @@ def build_parser() -> argparse.ArgumentParser:
     ru.add_argument("--interval", type=float, default=60.0)
     ru.add_argument("--max-ticks", type=int, default=None)
     ru.add_argument("--i-accept-real-money", action="store_true")
+    ru.add_argument("--copy", default=None, metavar="ADDRESS", help="mirror this trader")
+    mirror_args(ru)
+    ru.add_argument("--poll", type=float, default=300.0, help="seconds between trader polls")
+    ru.add_argument(
+        "--no-initial", action="store_true", help="do not copy the book found at start-up"
+    )
     ru.set_defaults(fn=cmd_run)
+
+    tr = sub.add_parser("traders", help="copy-trading candidates (public leaderboard)")
+    tr.add_argument("--top", type=int, default=20, help="per view before blending")
+    tr.add_argument("--min-equity", type=float, default=10_000.0)
+    tr.add_argument("--max-equity", type=float, default=MAX_ACCOUNT_VALUE, help="skip vaults")
+    tr.add_argument("--max-roi", type=float, default=MAX_ROI * 100, help="window ROI cap, %%")
+    tr.add_argument("--all", action="store_true", help="also list traders with no open position")
+    tr.add_argument("--refresh", action="store_true", help="ignore the 6 h leaderboard cache")
+    mirror_args(tr, budget_default=100.0)
+    tr.set_defaults(fn=cmd_traders)
+
+    ms = sub.add_parser("mirror-sim", help="dry-run a mirror of one address")
+    ms.add_argument("address")
+    mirror_args(ms)
+    ms.set_defaults(fn=cmd_mirror_sim)
     return p
+
+
+def mirror_args(p: argparse.ArgumentParser, *, budget_default: float | None = None) -> None:
+    p.add_argument(
+        "--budget", type=float, default=budget_default, help="USD to mirror with (default: all)"
+    )
+    p.add_argument("--multiplier", type=float, default=1.0, help="scale the trader's allocation")
+    p.add_argument("--slippage", type=float, default=3.0, help="max %% moved from their entry")
 
 
 def main(argv: Sequence[str] | None = None) -> int:

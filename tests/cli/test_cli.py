@@ -7,9 +7,11 @@ import httpx
 import pytest
 
 from hl_agent import cli
+from hl_agent.copy.discovery import parse_leaderboard
 from hl_agent.data.binance_client import BinanceClient
 from hl_agent.data.history import CandleStore
 from hl_agent.data.hyperliquid_client import HyperliquidClient
+from hl_agent.data.models import AccountState, Direction, Position
 from hl_agent.execution.live import LiveMarketSource, Network
 from hl_agent.execution.runner import STOP_FILE
 from tests.data.test_binance import kline_handler
@@ -231,3 +233,87 @@ def test_mainnet_needs_explicit_consent(
         capsys=capsys,
     )
     assert code == 2 and "i-accept-real-money" in out
+
+
+# ---- copy-trading ----------------------------------------------------------------------
+
+TRADER = "0x" + "cd" * 20
+
+
+class FakeFeed:
+    """Mainnet stand-in: one trader long BTC with 10 % of a 10 000 $ book at 5x."""
+
+    def __init__(self, prices: dict[str, float] | None = None) -> None:
+        self.prices = prices or {"BTC": 100_000.5}
+        self.asked: list[str] = []
+
+    def account_state(self, address: str) -> AccountState:
+        self.asked.append(address)
+        btc = Position("BTC", Direction.LONG, 0.05, 100_000.0, 5, 1000.0, 0.0, None, 0.0)
+        return AccountState(10_000.0, 9_000.0, 1000.0, (btc,))
+
+    def all_mids(self) -> dict[str, float]:
+        return self.prices
+
+
+def test_traders_blends_leaderboard_and_profiles(
+    settings: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    from tests.copy.test_discovery import ROWS, raw_row
+
+    extra = raw_row(TRADER, 40_000, week=(1, 0.3, 1))
+    rows = parse_leaderboard({"leaderboardRows": [*ROWS, extra]})
+    monkeypatch.setattr(cli, "fetch_leaderboard", lambda path, refresh: rows)
+    feed = FakeFeed()
+    monkeypatch.setattr(cli, "mainnet_feed", lambda: feed)
+    code, out = run_cli("--settings", str(settings), "traders", "--top", "5", capsys=capsys)
+    assert code == 0 and "6 traders on the leaderboard, 4 candidates" in out
+    assert " 1 0xa " in out and "7d_roi,30d_roi,30d_pnl" in out  # seen in every view: first
+    assert TRADER in out and out.count("opens 1/1") == 4
+    assert " 0xc " not in out and " 0xd " not in out  # lottery ticket / vault filtered out
+    assert set(feed.asked) == {"0xa", "0xb", "0xe", TRADER}
+
+
+def test_mirror_sim_prints_requested_and_100_dollar_plans(
+    settings: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    monkeypatch.setattr(cli, "mainnet_feed", lambda: FakeFeed())
+    code, out = run_cli(
+        "--settings", str(settings), "mirror-sim", TRADER, "--budget", "999", capsys=capsys
+    )
+    assert code == 0 and "== budget 999 $ ==" in out and "== budget 100 $ ==" in out
+    # 10 % of 999 $ at our 5x cap (settings) = 99.90 margin; at 100 $ = 10.00
+    assert "99.90" in out and "10.00" in out and out.count("  open" + chr(10)) == 2
+
+
+def test_run_copy_mirrors_the_trader_on_the_first_tick(
+    settings: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    ex, info = FakeExchange(), FakeInfo()
+
+    def fake_venue(s: cli.Settings, address: str, *, trading: bool) -> cli.Venue:
+        client = HyperliquidClient(transport=httpx.MockTransport(info_handler))
+        return cli.Venue(LiveMarketSource(client, address), ex, info)
+
+    monkeypatch.setattr(cli, "build_venue", fake_venue)
+    monkeypatch.setattr(cli, "mainnet_feed", lambda: FakeFeed())
+    monkeypatch.setattr(cli, "_now_ms", lambda: 1_700_000_000_000)
+    code, out = run_cli(
+        "--settings",
+        str(settings),
+        "run",
+        "config/strategies/copy",
+        "--copy",
+        TRADER.upper(),
+        "--name",
+        "copy1",
+        "--interval",
+        "0",
+        "--max-ticks",
+        "1",
+        capsys=capsys,
+    )
+    assert code == 0 and f"copy -> {TRADER}" in out
+    opens = [c for c in ex.calls if c[0] == "market_open"]
+    # 10 % of our 100 $ at the trader's 5x (within the 5x cap) = 50 $ / 100 000.5, 5 dp
+    assert opens and opens[0][1] == ("BTC", True, 0.00049)

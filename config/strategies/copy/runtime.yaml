@@ -1,0 +1,53 @@
+# Copy-trading package (Axe 8). Same runtime.yaml format as a Senpi strategy, but the
+# signal source is not a scanner: `hl-agent run config/strategies/copy --copy 0xTRADER`
+# mirrors that address's perp book (see src/hl_agent/copy/mirror.py). Sizing comes from the
+# trader's allocation; only the exit ladder and guard rails are decided here.
+#
+# Ratchet ladder per Senpi's blueprint §6.4; the phase-1 floor is ours, not the trader's:
+# they may sit through -40 % ROE, we will not.
+
+name: copy
+version: "1.0.0"
+description: Mirror one Hyperliquid address with our sizing, cap, stops and kill switch.
+
+strategy:
+  slots: 6                    # positions mirrored at once; the trader's extra lines are skipped
+  default_leverage: 2         # only used when a mirrored position carries no leverage
+  trading_risk: conservative
+
+scanners: []                  # entries come from --copy, not from scan.py
+
+exit:
+  engine: dsl
+  interval_seconds: 60
+  dsl_preset:
+    hard_timeout:
+      enabled: true
+      interval_in_minutes: 43200          # 30 d: a swing trader's hold, then we stop waiting
+    weak_peak_cut:
+      enabled: false
+      interval_in_minutes: 360
+      min_value: 3.0
+    dead_weight_cut:
+      enabled: false
+      interval_in_minutes: 60
+    phase1:
+      enabled: true
+      max_loss_pct: 30.0                  # ROE: at 3x that is -10 % on price
+      retrace_threshold: 0
+      consecutive_breaches_required: 2    # one bad mid print does not close a mirror
+    phase2:
+      enabled: true
+      tiers:
+        - { trigger_pct: 10, lock_hw_pct: 50 }
+        - { trigger_pct: 25, lock_hw_pct: 70 }
+        - { trigger_pct: 50, lock_hw_pct: 85 }
+
+risk:
+  data_retention_seconds: 604800
+  guard_rails:
+    daily_loss_limit_pct: 10
+    max_entries_per_day: 12
+    max_consecutive_losses: 4
+    cooldown_seconds: 3600
+    drawdown_halt_pct: 20                 # blueprint §6.2: stop opening, keep existing

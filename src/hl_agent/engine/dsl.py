@@ -34,6 +34,7 @@ class CloseReason(StrEnum):
     DEAD_WEIGHT_CUT = "dead_weight_cut"
     FLIPPED = "flipped"
     MANUAL_CLOSE = "manual_close"
+    SOURCE_CLOSED = "source_closed"  # the signal source asked (copy-trading: the trader exited)
     CLOSED_EXTERNALLY = "closed_externally"
     LIQUIDATED = "liquidated"
 

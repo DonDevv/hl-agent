@@ -190,3 +190,21 @@ def test_second_entry_in_same_tick_is_sized_on_refreshed_withdrawable() -> None:
     # BTC took 60% of $100; ETH gets 60% of what is left (~$40), not of the stale $100
     assert ev[0].payload["margin_usd"] == pytest.approx(60.0, abs=0.5)
     assert ev[1].payload["margin_usd"] == pytest.approx(24.0, abs=0.5)
+
+
+def test_source_close_requests_close_tracked_positions_only() -> None:
+    engine, venue, q = make()
+    requests: list[list[str]] = []
+
+    class Exits:
+        def close_requests(self, now_ms: int) -> Sequence[str]:
+            return requests.pop(0) if requests else []
+
+    engine = Engine(CFG, venue, venue, q, now_ms=0, exits=Exits())
+    q.push("BTC", Direction.LONG, 0)
+    engine.step(0)
+    requests.append(["ETH", "BTC"])  # ETH is not ours: ignored, no broker call
+    ev = engine.step(MIN)
+    assert [(e.kind, e.reason) for e in ev] == [("closed", "source_closed")]
+    assert venue.closes == [("BTC", CloseReason.SOURCE_CLOSED)] and engine.positions == {}
+    assert engine.rails.last_close_ms["BTC"] == MIN
