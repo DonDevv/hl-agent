@@ -15,9 +15,11 @@ src/hl_agent/
   telemetry/   event log, metrics, reports                                         (axe 5)
   cli.py       fetch / validate / backtest / walkforward / run / report / status  (axe 6)
   copy/        copy-trading: leaderboard discovery + mirror source                 (axe 8)
+  web/         FastAPI dashboard + PWA (`hl-agent web`)                            (axe 9)
 strategies/    strategy packages (Senpi-format)
 config/        settings.example.toml → copy to settings.toml (git-ignored)
 config/strategies/copy   exit ladder + rails used by `run --copy` (no scanners)
+deploy/        systemd units for a VPS (agent + dashboard) and the Tailscale recipe
 tests/         pytest; fixtures are real recorded Hyperliquid payloads
 ```
 
@@ -69,6 +71,23 @@ copied — the package's DSL ladder, guard rails and kill switch apply. Books ar
 every `--poll` seconds: new positions are entered while still within the slippage band,
 closed ones are closed (`source_closed`), flipped ones close now and re-enter next tick.
 Margin resizes are ignored in v1. `--no-initial` skips the book found at start-up.
+
+### Dashboard (PWA)
+
+```bash
+pip install -e ".[web]"
+hl-agent web                              # http://127.0.0.1:8080
+hl-agent web --host 0.0.0.0 --token ...   # or HL_AGENT_WEB_TOKEN / [web] token
+```
+
+A Senpi-style phone dashboard: balance, equity curve, open perps, the agent's status with
+a **Stop** button (writes the `STOP` file the runner honours), the traders leaderboard with
+mirror plans at any budget, trades/events of every run, and the agent-key pre-flight.
+Read-only except the kill switch; secrets are never shown. It reads `runs/<name>/` and
+the account from `/info`, so it runs next to the agent on the same machine.
+
+On an iPhone open it in Safari, Share, **Add to Home Screen**: it then runs full-screen.
+See `deploy/README.md` for the VPS recipe (systemd + Tailscale, no port exposed).
 
 ## Dev
 

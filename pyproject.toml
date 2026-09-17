@@ -23,12 +23,19 @@ dev = [
     "ruff>=0.5",
     "types-PyYAML",
 ]
+web = [
+    "fastapi>=0.110",
+    "uvicorn[standard]>=0.29",
+]
 
 [project.scripts]
 hl-agent = "hl_agent.cli:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]
+
+[tool.setuptools.package-data]
+"hl_agent.web" = ["static/*"]
 
 [tool.ruff]
 line-length = 100

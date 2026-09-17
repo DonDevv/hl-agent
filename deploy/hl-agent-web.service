@@ -1,0 +1,22 @@
+# /etc/systemd/system/hl-agent-web.service — the dashboard, localhost only;
+# Tailscale (or Caddy) fronts it. Same env file: HL_AGENT_WEB_TOKEN=... (optional but wise).
+[Unit]
+Description=hl-agent dashboard
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=hl
+WorkingDirectory=/opt/hl-agent
+EnvironmentFile=/etc/hl-agent/env
+ExecStart=/opt/hl-agent/.venv/bin/hl-agent web --host 127.0.0.1 --port 8080
+Restart=on-failure
+RestartSec=10
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ReadWritePaths=/opt/hl-agent/runs /opt/hl-agent/data
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,23 @@
+# /etc/systemd/system/hl-agent.service — the trading agent (copy mode).
+# Secrets live in /etc/hl-agent/env (chmod 600, root:root):
+#   HL_AGENT_PRIVATE_KEY=0x...   (agent key, never the wallet key)
+[Unit]
+Description=hl-agent trading loop
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=hl
+WorkingDirectory=/opt/hl-agent
+EnvironmentFile=/etc/hl-agent/env
+ExecStart=/opt/hl-agent/.venv/bin/hl-agent run config/strategies/copy --copy 0xTRADER --name copy-live --poll 300
+Restart=on-failure
+RestartSec=30
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ReadWritePaths=/opt/hl-agent/runs /opt/hl-agent/data
+
+[Install]
+WantedBy=multi-user.target

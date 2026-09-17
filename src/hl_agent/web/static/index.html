@@ -1,0 +1,130 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>hl-agent</title>
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#08080c" media="(prefers-color-scheme: dark)">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="hl-agent">
+<link rel="manifest" href="/manifest.webmanifest">
+<link rel="icon" href="/static/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="/static/icon-180.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600;9..40,700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/static/app.css">
+</head>
+<body>
+<div id="app">
+  <header class="top">
+    <div class="brand">
+      <img src="/static/icon.svg" alt="" width="32" height="32">
+      <span>hl-agent</span>
+    </div>
+    <div class="top-right">
+      <span id="net" class="pill pill-muted">…</span>
+      <span id="key-dot" class="dot dot-muted" title="agent key"></span>
+    </div>
+  </header>
+
+  <main id="view-home" class="view">
+    <section class="balance">
+      <div class="label">Total balance</div>
+      <div class="big" id="balance">—</div>
+      <div class="delta" id="delta">—</div>
+    </section>
+
+    <section class="card chart-card">
+      <div class="chart-head">
+        <span class="section-label" id="chart-title">Acc. value</span>
+        <div class="chips" id="ranges">
+          <button data-range="1d">1D</button>
+          <button data-range="7d">7D</button>
+          <button data-range="all" class="on">ALL</button>
+        </div>
+      </div>
+      <svg id="chart" viewBox="0 0 360 140" preserveAspectRatio="none" aria-hidden="true"></svg>
+      <div class="chart-foot" id="chart-foot"></div>
+    </section>
+
+    <section>
+      <div class="section-label">Perps</div>
+      <div class="card list" id="positions"><div class="empty">No open position</div></div>
+    </section>
+
+    <section>
+      <div class="section-label">Agent</div>
+      <div class="card" id="agent"><div class="empty">No run yet</div></div>
+    </section>
+  </main>
+
+  <main id="view-traders" class="view hidden">
+    <section class="head-row">
+      <div>
+        <div class="label">Copy-trading</div>
+        <div class="h2">Traders</div>
+      </div>
+      <button class="btn btn-light" id="traders-refresh">Refresh</button>
+    </section>
+    <div class="muted small" id="traders-meta">Leaderboard blend: 7d ROI · 30d ROI · 30d PnL</div>
+    <div class="card list" id="traders"><div class="empty">Loading…</div></div>
+  </main>
+
+  <main id="view-activity" class="view hidden">
+    <section class="head-row">
+      <div>
+        <div class="label">Run</div>
+        <div class="h2" id="activity-run">—</div>
+      </div>
+      <select id="run-select" class="select"></select>
+    </section>
+    <div class="stats" id="stats"></div>
+    <div class="section-label">Trades</div>
+    <div class="card list" id="trades"><div class="empty">No closed trade</div></div>
+    <div class="section-label">Events</div>
+    <div class="card list" id="events"><div class="empty">No event</div></div>
+  </main>
+
+  <main id="view-profile" class="view hidden">
+    <section class="balance">
+      <div class="label">Account</div>
+      <div class="mono" id="address">—</div>
+    </section>
+    <div class="card kv" id="profile"></div>
+    <div class="section-label">Install</div>
+    <div class="card">
+      <p class="small">On iPhone: open this page in Safari, tap <b>Share</b> → <b>Add to Home Screen</b>. It then runs full-screen like an app.</p>
+    </div>
+    <div class="section-label">Access</div>
+    <div class="card">
+      <p class="small">Set a token with <code>[web] token</code> or <code>HL_AGENT_WEB_TOKEN</code>, then enter it here.</p>
+      <form id="login" class="row">
+        <input id="token" type="password" placeholder="token" autocomplete="current-password">
+        <button class="btn btn-dark" type="submit">Save</button>
+      </form>
+    </div>
+  </main>
+
+  <nav class="tabs">
+    <button data-view="home" class="on"><i class="ic ic-home"></i><span>Home</span></button>
+    <button data-view="traders"><i class="ic ic-users"></i><span>Traders</span></button>
+    <button data-view="activity"><i class="ic ic-list"></i><span>Activity</span></button>
+    <button data-view="profile"><i class="ic ic-user"></i><span>Profile</span></button>
+  </nav>
+
+  <div id="sheet" class="sheet hidden">
+    <div class="sheet-bg"></div>
+    <div class="sheet-body">
+      <div class="sheet-handle"></div>
+      <div id="sheet-content"></div>
+    </div>
+  </div>
+
+  <div id="toast" class="toast hidden"></div>
+</div>
+<script src="/static/app.js"></script>
+</body>
+</html>

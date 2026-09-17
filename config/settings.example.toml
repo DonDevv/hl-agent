@@ -21,3 +21,10 @@ cache_dir = "data/cache"
 # Extra HIP-3 dexs to trade (main dex is always on). Mainnet: ["xyz"] for equities.
 # Keep empty on testnet: it hosts hundreds of test dexs and listing them all hits rate limits.
 dexs = []
+
+[web]
+# `hl-agent web`: bind address / port; token gates every API call when set
+# (also HL_AGENT_WEB_TOKEN). Keep 127.0.0.1 and put Tailscale or a proxy in front.
+host = "127.0.0.1"
+port = 8080
+token = ""

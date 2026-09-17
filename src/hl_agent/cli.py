@@ -11,6 +11,7 @@
     stop         drop the STOP file so a running agent flattens and exits
     traders      copy-trading candidates from Hyperliquid's public leaderboard
     mirror-sim   dry-run: what mirroring one address would open at a given budget
+    web          dashboard + PWA on http://host:port (reads runs/, kill switch, traders)
 
 Settings come from ``config/settings.toml`` (see ``settings.example.toml``); secrets only
 from the environment (``HL_AGENT_PRIVATE_KEY``, ``HL_AGENT_ADDRESS``).
@@ -97,6 +98,9 @@ class Settings:
     cache_dir: Path = Path("data/cache")
     runs_dir: Path = Path("runs")
     dexs: tuple[str, ...] = ()  # extra HIP-3 dexs to load ("xyz", ...); main dex is implicit
+    web_token: str = ""  # shared secret for `hl-agent web`; env HL_AGENT_WEB_TOKEN overrides
+    web_host: str = "127.0.0.1"
+    web_port: int = 8080
 
     @classmethod
     def load(cls, path: Path | None) -> Settings:
@@ -112,6 +116,7 @@ class Settings:
         except ValueError as exc:
             raise CliError(f"network must be testnet or mainnet, got {net!r}") from exc
         risk, fees, data = raw.get("risk", {}), raw.get("fees", {}), raw.get("data", {})
+        web = raw.get("web", {})
         return cls(
             network=network,
             address=str(raw.get("account", {}).get("address", "")),
@@ -121,6 +126,9 @@ class Settings:
             cache_dir=Path(data.get("cache_dir", "data/cache")),
             runs_dir=Path(data.get("runs_dir", "runs")),
             dexs=tuple(str(d) for d in data.get("dexs", []) if d),
+            web_token=str(web.get("token", "")),
+            web_host=str(web.get("host", "127.0.0.1")),
+            web_port=int(web.get("port", 8080)),
         )
 
 
@@ -536,6 +544,19 @@ def cmd_run(args: argparse.Namespace, s: Settings) -> int:
         label = f"{pkg.spec.name} -> {copy.cfg.target}"
     engine = Engine(cfg, market, broker, source, now_ms=market.now_ms, exits=exits)
     log = EventLog(out / "events.jsonl")
+    (out / "run.json").write_text(
+        json.dumps(
+            {
+                "package": str(package),
+                "copy": copy_target(args),
+                "network": s.network.value,
+                "started_ms": _now_ms(),
+                "interval_s": args.interval,
+                "pid": os.getpid(),
+            }
+        ),
+        encoding="utf-8",
+    )
 
     def sink(e: Event) -> None:
         log.write(e)
@@ -556,6 +577,47 @@ def cmd_run(args: argparse.Namespace, s: Settings) -> int:
     why = runner.run(max_ticks=args.max_ticks)
     print(f"stopped: {why} after {runner.ticks} ticks, {runner.errors} errors")
     return 0 if why in ("stop_file", "max_ticks") else 1
+
+
+def copy_target(args: argparse.Namespace) -> str | None:
+    return str(args.copy).lower() if getattr(args, "copy", None) else None
+
+
+# ---- web ---------------------------------------------------------------------------
+
+
+def cmd_web(args: argparse.Namespace, s: Settings) -> int:
+    import uvicorn
+
+    from hl_agent.web.app import AccountView, WebConfig, create_app, resolve_token
+
+    address = _address(s)
+    market = build_venue(s, address, trading=False).market
+
+    def account() -> AccountState:
+        market.refresh(_now_ms())
+        return market.account()
+
+    cfg = WebConfig(
+        network=s.network.value,
+        address=address,
+        runs_dir=s.runs_dir,
+        cache_dir=s.cache_dir,
+        max_leverage=s.max_leverage,
+        token=resolve_token(args.token, s.web_token),
+    )
+    view = AccountView(account, market.mids, lambda: agent_key_status(s, address))
+    app = create_app(cfg, view, mainnet_feed)
+    host, port = args.host or s.web_host, args.port or s.web_port
+    print(f"dashboard on http://{host}:{port}  auth: {'token' if cfg.token else 'OPEN'}")
+    if not cfg.token and host not in ("127.0.0.1", "localhost"):
+        print(
+            "WARNING: no token set and bound beyond localhost; put it behind Tailscale or a "
+            "proxy, or set [web] token / HL_AGENT_WEB_TOKEN",
+            file=sys.stderr,
+        )
+    uvicorn.run(app, host=host, port=port, log_level="warning")
+    return 0
 
 
 # ---- copy-trading ------------------------------------------------------------------
@@ -797,6 +859,12 @@ def build_parser() -> argparse.ArgumentParser:
     ms.add_argument("address")
     mirror_args(ms)
     ms.set_defaults(fn=cmd_mirror_sim)
+
+    wb = sub.add_parser("web", help="dashboard + PWA")
+    wb.add_argument("--host", default=None, help="default [web] host or 127.0.0.1")
+    wb.add_argument("--port", type=int, default=None, help="default [web] port or 8080")
+    wb.add_argument("--token", default=None, help="shared secret (or HL_AGENT_WEB_TOKEN)")
+    wb.set_defaults(fn=cmd_web)
     return p
 
 
