@@ -1,7 +1,8 @@
 {
   "name": "hl-agent",
   "short_name": "hl-agent",
-  "description": "Hyperliquid trading agent dashboard",
+  "description": "Tableau de bord de l’agent de trading Hyperliquid",
+  "lang": "fr",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",

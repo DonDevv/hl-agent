@@ -684,7 +684,8 @@ def create_app(
 
     @app.get("/", include_in_schema=False)
     def index() -> FileResponse:
-        return FileResponse(STATIC_DIR / "index.html")
+        # Always revalidate the shell so a new ``?v=`` asset stamp reaches phones.
+        return FileResponse(STATIC_DIR / "index.html", headers={"cache-control": "no-cache"})
 
     @app.get("/manifest.webmanifest", include_in_schema=False)
     def manifest() -> FileResponse:
