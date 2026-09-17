@@ -327,8 +327,8 @@
     $("#sheet-body").innerHTML = `${head}
       <svg class="sheet-chart" viewBox="0 0 360 120" preserveAspectRatio="none"></svg>
       <section class="stats">
-        <div><div class="k">Rendement</div><div class="v ${cls(ret)}">${fmtPct(ret)}</div></div>
-        <div><div class="k">Équité</div><div class="v">${fmtUsd(last)}</div></div>
+        <div><div class="k">Rendement</div><div class="v ${cls(ret)}" id="live-ret">${fmtPct(ret)}</div></div>
+        <div><div class="k">Équité</div><div class="v" id="live-eq">${fmtUsd(last)}</div></div>
         <div><div class="k">Max DD</div><div class="v down">${m ? m.drawdown.max_pct.toFixed(1) + "%" : "—"}</div></div>
         <div><div class="k">Trades</div><div class="v">${m ? m.trades : 0}</div></div>
         <div><div class="k">Taux de gain</div><div class="v">${m ? m.win_rate.toFixed(0) + "%" : "—"}</div></div>
@@ -349,6 +349,21 @@
         </div>`],
       ])}`;
     drawChart($(".sheet-chart"), eq, "all");
+    if (r.kind === "live" && r.alive) {
+      // Live run: keep the curve and the two headline numbers moving while the sheet is open.
+      state.sheet.poll = setInterval(async () => {
+        try {
+          const cur = await api(`/api/runs/${name}/equity`);
+          if (!state.sheet || state.sheet.id !== name) return;
+          drawChart($(".sheet-chart"), cur, "all");
+          const a = cur.length ? cur[0][1] : null, z = cur.length ? cur[cur.length - 1][1] : null;
+          const pct = a ? ((z - a) / a) * 100 : null;
+          const re = $("#live-ret"), eqEl = $("#live-eq");
+          if (re) { re.textContent = fmtPct(pct); re.className = `v ${cls(pct)}`; }
+          if (eqEl) eqEl.textContent = fmtUsd(z);
+        } catch (e) { /* transient */ }
+      }, 15000);
+    }
   }
 
   function openWalkforward(r) {
