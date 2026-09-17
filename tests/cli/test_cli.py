@@ -15,7 +15,7 @@ from hl_agent.data.models import AccountState, Direction, Position
 from hl_agent.execution.live import LiveMarketSource, Network
 from hl_agent.execution.runner import STOP_FILE
 from tests.data.test_binance import kline_handler
-from tests.execution.test_live import ADDR, FakeExchange, FakeInfo, info_handler
+from tests.execution.test_live import ADDR, AGENT, AGENT_KEY, FakeExchange, FakeInfo, info_handler
 from tests.strategy.conftest import INSTRUMENTS, STRATEGIES, H
 
 
@@ -174,17 +174,31 @@ def test_status_stop_and_run(
     settings: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
     ex, info = FakeExchange(), FakeInfo()
+    transport = httpx.MockTransport(info_handler)
 
     def fake_venue(s: cli.Settings, address: str, *, trading: bool) -> cli.Venue:
-        client = HyperliquidClient(transport=httpx.MockTransport(info_handler))
+        client = HyperliquidClient(transport=transport)
         market = LiveMarketSource(client, address)
         return cli.Venue(market, ex if trading else None, info if trading else None)
 
     monkeypatch.setattr(cli, "build_venue", fake_venue)
     monkeypatch.setattr(cli, "_now_ms", lambda: 1_700_000_000_000)
 
+    monkeypatch.setattr(
+        cli, "HyperliquidClient", lambda url: HyperliquidClient(base_url=url, transport=transport)
+    )
     code, out = run_cli("--settings", str(settings), "status", capsys=capsys)
-    assert code == 0 and "account value 100.00" in out
+    assert code == 0 and "account value 100.00" in out and "agent key: missing" in out
+    monkeypatch.setenv("HL_AGENT_PRIVATE_KEY", AGENT_KEY)
+    code, out = run_cli("--settings", str(settings), "status", capsys=capsys)
+    assert f"agent key: {AGENT} authorised for {ADDR} (hl-agent, valid until 2027-01-15)" in out
+    monkeypatch.setenv("HL_AGENT_PRIVATE_KEY", "0x" + "00" * 31 + "02")
+    code, out = run_cli("--settings", str(settings), "status", capsys=capsys)
+    assert "is NOT an agent of" in out
+    monkeypatch.setenv("HL_AGENT_PRIVATE_KEY", "garbage")
+    code, out = run_cli("--settings", str(settings), "status", capsys=capsys)
+    assert "not a valid private key" in out
+    monkeypatch.delenv("HL_AGENT_PRIVATE_KEY")
 
     code, out = run_cli(
         "--settings",

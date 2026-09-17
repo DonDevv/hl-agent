@@ -446,7 +446,29 @@ def cmd_status(args: argparse.Namespace, s: Settings) -> int:
     if s.runs_dir.exists():
         for stop in sorted(s.runs_dir.glob(f"*/{STOP_FILE}")):
             print(f"STOP present in {stop.parent}")
+    print(agent_key_status(s, address))
     return 0
+
+
+def agent_key_status(s: Settings, address: str) -> str:
+    """Pre-flight for ``run``: is the key in the environment an agent authorised for
+    ``address`` on this network? Only the derived agent *address* is ever shown."""
+    try:
+        signer = load_signer()
+    except BrokerError as e:
+        return f"agent key: missing ({e}); `run` will refuse to trade"
+    except ValueError:
+        return "agent key: set but not a valid private key"
+    agent = str(signer.address).lower()
+    agents = HyperliquidClient(s.network.url).extra_agents(address)
+    for a in agents:
+        if str(a.get("address", "")).lower() == agent:
+            until = datetime.fromtimestamp(int(a.get("validUntil", 0)) / 1000, tz=UTC)
+            return (
+                f"agent key: {agent} authorised for {address} "
+                f"({a.get('name', '?')}, valid until {until:%Y-%m-%d})"
+            )
+    return f"agent key: {agent} is NOT an agent of {address} on {s.network.value}"
 
 
 def cmd_stop(args: argparse.Namespace, s: Settings) -> int:

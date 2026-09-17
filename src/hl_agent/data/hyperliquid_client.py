@@ -186,6 +186,11 @@ class HyperliquidClient:
             payload["dex"] = dex
         return AccountState.from_api(self._info(payload))
 
+    def extra_agents(self, address: str) -> list[dict[str, Any]]:
+        """Agent wallets authorised to sign for ``address``: ``[{name, address, validUntil}]``."""
+        raw = self._info({"type": "extraAgents", "user": address})
+        return [dict(a) for a in raw] if isinstance(raw, list) else []
+
     def order_book(self, asset: str, depth: int = 20) -> dict[str, list[tuple[float, float]]]:
         """``{"bids": [(px, sz), ...], "asks": [...]}`` best-first."""
         raw = self._info({"type": "l2Book", "coin": asset})

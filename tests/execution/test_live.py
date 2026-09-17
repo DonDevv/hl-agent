@@ -21,6 +21,9 @@ from hl_agent.execution.live import (
 )
 
 ADDR = "0x" + "ab" * 20
+# eth_account test vector: private key 0x01 -> this address
+AGENT_KEY = "0x" + "00" * 31 + "01"
+AGENT = "0x7e5f4552091a69125d5dfcb7b8c2659029395bdf"
 H = 3_600_000
 
 
@@ -64,6 +67,11 @@ def info_handler(request: httpx.Request) -> httpx.Response:
             for i in range(10)
         ]
         return httpx.Response(200, json=bars)
+    if t == "extraAgents":
+        return httpx.Response(
+            200,
+            json=[{"name": "hl-agent", "address": AGENT, "validUntil": 1_800_000_000_000}],
+        )
     if t == "fundingHistory":
         return httpx.Response(200, json=[{"coin": "BTC", "time": 0, "fundingRate": "0.0001"}])
     return httpx.Response(400, json={"error": t})
