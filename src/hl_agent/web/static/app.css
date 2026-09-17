@@ -55,8 +55,9 @@ a { color: var(--primary); text-decoration: none; }
   background: var(--bg);
 }
 .brand { display: flex; align-items: center; gap: 8px; font-weight: 700; font-size: 17px; }
-.brand img { height: 30px; width: auto; display: block; }
-.top-right { display: flex; align-items: center; gap: 8px; }
+.brand { min-width: 0; }
+.brand img { height: 32px; width: auto; max-width: 100%; object-fit: contain; display: block; flex-shrink: 0; }
+.top-right { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
 
 .pill {
   display: inline-block; padding: 3px 10px; border-radius: 999px;
