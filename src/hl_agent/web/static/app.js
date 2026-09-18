@@ -133,7 +133,11 @@
   // Le gros pourcentage HL est en Teodor Light (police commerciale) : on la sert depuis
   // /static/fonts/Teodor-Light.woff2 si le fichier est là, sinon Instrument Serif (sosie libre).
   const NUMFONT = "Teodor, 'Instrument Serif', Georgia, serif";
-  const fontsReady = document.fonts ? Promise.all(["500 24px Inter", "600 34px Inter", "700 40px Inter", "300 160px Teodor", "400 160px 'Instrument Serif'"].map((f) => document.fonts.load(f).catch(() => null))) : Promise.resolve();
+  // Safari peut ne jamais résoudre document.fonts.load() sur une police absente : délai max 2,5 s.
+  const fontsReady = Promise.race([
+    document.fonts ? Promise.all(["500 24px Inter", "600 34px Inter", "700 40px Inter", "300 160px Teodor", "400 160px 'Instrument Serif'"].map((f) => document.fonts.load(f).catch(() => null))) : Promise.resolve(),
+    new Promise((res) => setTimeout(res, 2500)),
+  ]);
   // Prix façon HL : virgule décimale, pas de symbole, 5 chiffres significatifs sous 1.
   const fmtPx = (v) => {
     if (v == null || !isFinite(Number(v))) return "—";
@@ -225,7 +229,8 @@
     state.card = t;
     $("#card").classList.remove("hidden");
     $("#card .card-live").classList.toggle("hidden", !!t.closed);
-    $("#card-error")?.classList.add("hidden"); drawCard($("#card-canvas"), t).catch(cardError);
+    $("#card-error")?.classList.add("hidden");
+    try { drawCard($("#card-canvas"), t).catch(cardError); } catch (e) { cardError(e); }
   }
   function closeCard() { state.card = null; $("#card").classList.add("hidden"); }
   // Position ouverte → la carte suit le poll du compte.
@@ -235,7 +240,8 @@
     const p = state.data.account.positions.find((q) => q.asset === t.asset);
     if (!p) { t.closed = true; t.closed_ms = Date.now(); $("#card .card-live").classList.add("hidden"); }
     else Object.assign(t, { roe: p.roe, pnl: p.upnl, price: p.price, entry: p.entry, leverage: p.leverage, direction: p.direction });
-    $("#card-error")?.classList.add("hidden"); drawCard($("#card-canvas"), t).catch(cardError);
+    $("#card-error")?.classList.add("hidden");
+    try { drawCard($("#card-canvas"), t).catch(cardError); } catch (e) { cardError(e); }
   }
   const cardBlob = () => new Promise((res) => $("#card-canvas").toBlob(res, "image/png"));
   const cardName = () => `${String(state.card?.asset || "trade").replace(/[^A-Za-z0-9]/g, "")}-${state.card?.direction || ""}-${new Date().toISOString().slice(0, 10)}.png`;
