@@ -1,3 +1,7 @@
+/* Police du gros pourcentage sur la carte (Teodor Light, fichier sous licence à déposer ici). */
+@font-face { font-family: "Teodor"; font-weight: 300; font-style: normal; font-display: swap;
+  src: url("/static/fonts/Teodor-Light.woff2?v=9") format("woff2"); }
+
 /* hl-agent dashboard: Senpi-like, light only. */
 :root {
   --top-h: 56px;

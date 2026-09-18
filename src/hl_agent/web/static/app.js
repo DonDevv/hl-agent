@@ -124,7 +124,10 @@
   const rr = (ctx, x, y, w, h, r) => { ctx.beginPath(); ctx.roundRect(x, y, w, h, r); };
   // Même police que la carte Hyperliquid (Inter Bold) pour tous les chiffres.
   const FONT = "Inter, -apple-system, 'Segoe UI', sans-serif";
-  const fontsReady = document.fonts ? Promise.all(["500 24px Inter", "600 34px Inter", "700 40px Inter", "800 150px Inter"].map((f) => document.fonts.load(f).catch(() => null))) : Promise.resolve();
+  // Le gros pourcentage HL est en Teodor Light (police commerciale) : on la sert depuis
+  // /static/fonts/Teodor-Light.woff2 si le fichier est là, sinon Instrument Serif (sosie libre).
+  const NUMFONT = "Teodor, 'Instrument Serif', Georgia, serif";
+  const fontsReady = document.fonts ? Promise.all(["500 24px Inter", "600 34px Inter", "700 40px Inter", "300 160px Teodor", "400 160px 'Instrument Serif'"].map((f) => document.fonts.load(f).catch(() => null))) : Promise.resolve();
   async function drawCard(c, t) {
     await fontsReady;
     const ctx = c.getContext("2d"), W = c.width, H = c.height;
@@ -159,8 +162,8 @@
     rr(ctx, x, y - 24, lw, 48, 12); ctx.fillStyle = accent + "33"; ctx.fill(); ctx.strokeStyle = accent; ctx.lineWidth = 2; ctx.stroke();
     ctx.fillStyle = accent; ctx.fillText(label, x + 18, y + 1);
     // ROE
-    ctx.fillStyle = accent; ctx.font = `800 150px ${FONT}`; ctx.textBaseline = "alphabetic";
-    ctx.fillText(t.roe == null ? "—" : `${t.roe >= 0 ? "+" : "−"}${Math.abs(t.roe).toFixed(1)}%`, 50, 405);
+    ctx.fillStyle = accent; ctx.font = `300 170px ${NUMFONT}`; ctx.textBaseline = "alphabetic";
+    ctx.fillText(t.roe == null ? "—" : `${t.roe >= 0 ? "+" : "−"}${Math.abs(t.roe).toFixed(1).replace(".", ",")}%`, 46, 410);
     if (t.pnl != null) { ctx.fillStyle = "#e2e8f0"; ctx.font = `600 34px ${FONT}`; ctx.fillText(`${t.pnl >= 0 ? "+" : "−"}${fmtUsd(Math.abs(t.pnl), 2)}`, 56, 460); }
     // prix
     const cols = [["Entrée", fmtUsd(t.entry)], [t.closed ? "Sortie" : "Cours", fmtUsd(t.price)]];
