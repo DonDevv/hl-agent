@@ -577,18 +577,22 @@ def create_app(
 
     # ---- strategies ----------------------------------------------------------------
 
+    def _pkg_key(p: object) -> str:
+        """run.json stores the package path as written by the CLI; compare it OS-agnostically."""
+        return Path(str(p)).as_posix() if p else ""
+
     @app.get("/api/strategies", dependencies=[api])
     def strategies() -> list[dict[str, Any]]:
         runs = list_runs(cfg.runs_dir, now_s=clock())
         by_pkg: dict[str, int] = {}
         for r in runs:
-            key = str(r.get("package") or "")
+            key = _pkg_key(r.get("package"))
             if key:
                 by_pkg[key] = by_pkg.get(key, 0) + 1
         out = []
         for pid, d, root in find_packages(cfg.strategy_dirs):
             c = card_json(cached_card(pid, d, root, cfg.env))
-            c["runs"] = by_pkg.get(str(d), 0) + by_pkg.get(d.as_posix(), 0)
+            c["runs"] = by_pkg.get(_pkg_key(d), 0)
             out.append(c)
         return out
 
@@ -600,9 +604,9 @@ def create_app(
         d, root = known[pid]
         out = card_json(cached_card(pid, d, root, cfg.env))
         out["runtime_yaml"] = runtime_text(d, cfg.env)
-        keys = {str(d), d.as_posix()}
+        key = _pkg_key(d)
         out["run_list"] = [
-            r for r in list_runs(cfg.runs_dir, now_s=clock()) if str(r.get("package")) in keys
+            r for r in list_runs(cfg.runs_dir, now_s=clock()) if _pkg_key(r.get("package")) == key
         ]
         return out
 
