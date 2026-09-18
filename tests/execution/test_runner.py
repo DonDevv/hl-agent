@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import json
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from pathlib import Path
 
 import httpx
@@ -27,8 +27,10 @@ class Once:
     def __init__(self) -> None:
         self.sent = False
         self.boom = False
+        self.before: Callable[[], None] = lambda: None
 
     def signals(self, now_ms: int) -> Sequence[Signal]:
+        self.before()
         if self.boom:
             raise RuntimeError("scanner exploded")
         if self.sent:
@@ -124,6 +126,22 @@ def test_error_streak_stops_the_loop(tmp_path: Path) -> None:
     runner, source, _, _, _ = build(tmp_path)
     source.boom = True
     assert runner.run() == "too_many_errors" and runner.errors == 2
+
+
+def test_network_outage_backs_off_instead_of_stopping(tmp_path: Path) -> None:
+    runner, source, sink, _, clock = build(tmp_path)
+    left = 5
+
+    def flaky() -> None:
+        nonlocal left
+        left -= 1
+        if left >= 0:
+            raise RuntimeError("wrapped") from httpx.ConnectError("name resolution")
+
+    source.before = flaky
+    assert runner.run(max_ticks=1) == "max_ticks"
+    assert runner.errors == 5 and runner.ticks == 1 and [e.kind for e in sink] == ["opened"]
+    assert clock.slept[:5] == [20.0, 40.0, 80.0, 160.0, 300.0]
 
 
 def test_mainnet_needs_explicit_consent() -> None:
