@@ -155,7 +155,7 @@
     ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
     // anneaux : contours décalés de la flèche (trait épais − trait plus fin), du plus loin au plus près
     const o = document.createElement("canvas"); o.width = W * S; o.height = H * S;
-    const oc = o.getContext("2d"); oc.scale(S, S); oc.translate(688, 356); oc.lineJoin = "round"; oc.lineCap = "round";
+    const oc = o.getContext("2d"); oc.scale(S, S); oc.translate(688, 356); if (!up) oc.scale(1, -1); oc.lineJoin = "round"; oc.lineCap = "round";
     const rings = [];
     for (let d = 14, k = 0; d < 720; k++, d += 12 + k * 0.45) rings.push(d);
     for (const d of rings.reverse()) {
@@ -191,12 +191,13 @@
     const label = `${t.direction === "LONG" ? "LONG" : "SHORT"} ${t.leverage ? Math.round(t.leverage) + "X" : ""}`.trim();
     ctx.font = `500 22px ${FONT}`;
     const lw = ctx.measureText(label).width + 24;
-    rr(ctx, x, y - 18, lw, 36, 6); ctx.fillStyle = up ? "#173f3c" : "#3d222a"; ctx.fill();
-    ctx.fillStyle = accent; ctx.fillText(label, x + 12, y + 1);
+    // la pastille reste teal sur HL, même sur un trade perdant
+    rr(ctx, x, y - 18, lw, 36, 6); ctx.fillStyle = "#173f3c"; ctx.fill();
+    ctx.fillStyle = "#50d2c1"; ctx.fillText(label, x + 12, y + 1);
     // ROE (Teodor Light)
     ctx.textBaseline = "alphabetic";
     ctx.fillStyle = accent; ctx.font = `300 122px ${NUMFONT}`;
-    ctx.fillText(t.roe == null ? "—" : `${t.roe >= 0 ? "+" : "−"}${Math.abs(t.roe).toFixed(1).replace(".", ",")}%`, 48, 412);
+    ctx.fillText(t.roe == null ? "—" : `${t.roe >= 0 ? "+" : "-"}${Math.abs(t.roe).toFixed(1).replace(".", ",")}%`, 48, 412);
     // prix
     const cols = [["Prix d'entrée", fmtPx(t.entry)], [t.closed ? "Prix de sortie" : "Prix actuel", fmtPx(t.price)]];
     x = 52;
