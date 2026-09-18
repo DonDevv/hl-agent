@@ -1,6 +1,6 @@
 /* Police du gros pourcentage sur la carte (Teodor Light, fichier sous licence à déposer ici). */
 @font-face { font-family: "Teodor"; font-weight: 300; font-style: normal; font-display: swap;
-  src: url("/static/fonts/Teodor-Light.woff2?v=11") format("woff2"); }
+  src: url("/static/fonts/Teodor-Light.woff2?v=12") format("woff2"); }
 
 /* hl-agent dashboard: Senpi-like, light only. */
 :root {
@@ -199,10 +199,12 @@ input:focus, select:focus { border-color: var(--primary); }
 .tabs button svg { width: 22px; height: 22px; fill: currentColor; }
 .tabs button.on { color: var(--fg); }
 
-.card-modal { position: fixed; inset: 0; z-index: 30; display: grid; place-items: center; padding: 16px; }
-.card-backdrop { position: absolute; inset: 0; background: rgba(0,0,0,.55); }
-.card-panel { position: relative; width: 100%; max-width: 560px; display: grid; gap: 12px; animation: up .2s ease-out; }
-.card-panel canvas { width: 100%; height: auto; border-radius: 18px; box-shadow: 0 20px 60px rgba(0,0,0,.4); display: block; }
+/* Pas de grid ici : Safari iOS réduit à 0 les enfants absolus/canvas d'un conteneur grid centré. */
+.card-modal { position: fixed; top: 0; right: 0; bottom: 0; left: 0; z-index: 30; display: flex; align-items: center; justify-content: center; padding: 16px; }
+.card-backdrop { position: fixed; top: 0; right: 0; bottom: 0; left: 0; background: rgba(0,0,0,.55); }
+.card-panel { position: relative; width: 100%; max-width: 560px; display: block; animation: up .2s ease-out; }
+.card-panel > * + * { margin-top: 12px; }
+.card-panel canvas { width: 100%; height: auto; aspect-ratio: 975 / 697; border-radius: 18px; box-shadow: 0 20px 60px rgba(0,0,0,.4); display: block; }
 .card-panel .btn-row { display: flex; gap: 8px; justify-content: center; }
 .card-panel .btn { flex: 1; }
 .card-live { color: #fff; font-size: 12px; display: flex; align-items: center; gap: 6px; justify-content: center; }

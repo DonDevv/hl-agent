@@ -151,6 +151,8 @@
     await fontsReady;
     const W = 975, H = 697, S = 2;
     c.width = W * S; c.height = H * S;
+    // hauteur CSS explicite (Safari iOS ne déduit pas toujours la hauteur d'un canvas en width:100%)
+    if (c.clientWidth) c.style.height = `${Math.round(c.clientWidth * H / W)}px`;
     const ctx = c.getContext("2d"); ctx.scale(S, S);
     const up = (t.roe ?? 0) >= 0;
     const accent = up ? "#50d2c1" : "#ed7088", rgb = up ? "80,210,193" : "237,112,136";
