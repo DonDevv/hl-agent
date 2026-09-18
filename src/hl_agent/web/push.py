@@ -19,7 +19,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-DEFAULT_SUBJECT = "https://github.com/DonDevv/hl-agent"  # VAPID "sub": who to contact
+# VAPID "sub": who a push service may contact. py-vapid only accepts "mailto:" or a bare origin.
+DEFAULT_SUBJECT = "mailto:96831023+DonDevv@users.noreply.github.com"
 MAX_SUBSCRIPTIONS = 20
 TTL_S = 6 * 3600  # how long the push service keeps an undelivered message
 
