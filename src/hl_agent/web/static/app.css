@@ -195,6 +195,16 @@ input:focus, select:focus { border-color: var(--primary); }
 .tabs button svg { width: 22px; height: 22px; fill: currentColor; }
 .tabs button.on { color: var(--fg); }
 
+.card-modal { position: fixed; inset: 0; z-index: 30; display: grid; place-items: center; padding: 16px; }
+.card-backdrop { position: absolute; inset: 0; background: rgba(0,0,0,.55); }
+.card-panel { position: relative; width: 100%; max-width: 560px; display: grid; gap: 12px; animation: up .2s ease-out; }
+.card-panel canvas { width: 100%; height: auto; border-radius: 18px; box-shadow: 0 20px 60px rgba(0,0,0,.4); display: block; }
+.card-panel .btn-row { display: flex; gap: 8px; justify-content: center; }
+.card-panel .btn { flex: 1; }
+.card-live { color: #fff; font-size: 12px; display: flex; align-items: center; gap: 6px; justify-content: center; }
+.list .item.tap { cursor: pointer; }
+.list .item.tap:active { background: var(--muted); }
+tr.tap { cursor: pointer; }
 .sheet { position: fixed; inset: 0; z-index: 20; }
 .sheet-backdrop { position: absolute; inset: 0; background: rgba(0,0,0,.35); }
 .sheet-panel {

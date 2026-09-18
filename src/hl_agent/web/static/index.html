@@ -164,6 +164,18 @@
     </button>
   </nav>
 
+  <div id="card" class="card-modal hidden" role="dialog" aria-modal="true">
+    <div class="card-backdrop"></div>
+    <div class="card-panel">
+      <canvas id="card-canvas" width="1200" height="675"></canvas>
+      <div class="card-live hidden"><span class="dot dot-green"></span> en direct</div>
+      <div class="btn-row">
+        <button class="btn btn-dark" id="card-share">Partager</button>
+        <button class="btn" id="card-save">Enregistrer</button>
+        <button class="btn" id="card-close">Fermer</button>
+      </div>
+    </div>
+  </div>
   <div id="sheet" class="sheet hidden" role="dialog" aria-modal="true">
     <div class="sheet-backdrop"></div>
     <div class="sheet-panel">

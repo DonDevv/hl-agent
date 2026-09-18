@@ -8,7 +8,7 @@
   // Logo de l'actif (icônes publiques de l'app Hyperliquid) ; le ticker reste derrière si l'image manque.
   const coinIcon = (asset, size = 40) => {
     const sym = String(asset || "").split(":").pop().replace(/^k/, "");
-    return `<div class="icon coin" style="width:${size}px;height:${size}px"><span>${esc(sym.slice(0, 4))}</span><img src="https://app.hyperliquid.xyz/coins/${encodeURIComponent(sym)}.svg" alt="" loading="lazy" onerror="this.remove()"></div>`;
+    return `<div class="icon coin" style="width:${size}px;height:${size}px"><span>${esc(sym.slice(0, 4))}</span><img src="/coins/${encodeURIComponent(sym)}.svg" alt="" loading="lazy" onerror="this.remove()"></div>`;
   };
   const coinInline = (asset) => `<span class="coin-inline">${coinIcon(asset, 18)}${esc(asset)}</span>`;
 
@@ -28,6 +28,8 @@
     cache: null,
     settings: null,
     sheet: null, // { type, id, poll }
+    card: null, // trade affiché dans la carte de partage
+    trades: [], // trades du run ouvert (pour la carte)
     subtab: {},
   };
 
@@ -38,7 +40,7 @@
     const n = Number(v);
     const digits = d ?? (Math.abs(n) >= 1000 ? 0 : 2);
     // Prix < 1 $ (PUMP, ARB…) : garder 4 chiffres significatifs plutôt que d'afficher $0.00.
-    const sig = Math.abs(n) > 0 && Math.abs(n) < 1 ? Math.max(digits, 3 - Math.floor(Math.log10(Math.abs(n)))) : digits;
+    const sig = d == null && Math.abs(n) > 0 && Math.abs(n) < 1 ? Math.max(digits, 3 - Math.floor(Math.log10(Math.abs(n)))) : digits;
     return (n < 0 ? "-" : "") + "$" + Math.abs(n).toLocaleString("en-US", { minimumFractionDigits: digits, maximumFractionDigits: sig });
   };
   const fmtPct = (v, d = 1) => (v == null || Number.isNaN(v) ? "—" : `${v >= 0 ? "+" : ""}${Number(v).toFixed(d)}%`);
@@ -113,6 +115,101 @@
 
   $$(".tabs button").forEach((b) => b.addEventListener("click", () => setView(b.dataset.view)));
 
+  // ---- carte de trade (partage) -------------------------------------------------------
+  // Une carte façon "PnL card" : position ouverte (rafraîchie à chaque poll) ou trade fermé.
+  const imgCache = {};
+  const loadImg = (src) => imgCache[src] || (imgCache[src] = new Promise((res) => {
+    const im = new Image(); im.onload = () => res(im); im.onerror = () => res(null); im.src = src;
+  }));
+  const rr = (ctx, x, y, w, h, r) => { ctx.beginPath(); ctx.roundRect(x, y, w, h, r); };
+  const FONT = "-apple-system, Inter, 'Segoe UI', sans-serif";
+  async function drawCard(c, t) {
+    const ctx = c.getContext("2d"), W = c.width, H = c.height;
+    const up = (t.roe ?? 0) >= 0, accent = up ? "#22c55e" : "#ef4444";
+    const g = ctx.createLinearGradient(0, 0, W, H);
+    g.addColorStop(0, "#0b0f14"); g.addColorStop(1, up ? "#061a10" : "#1a0808");
+    ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
+    // anneaux concentriques + flèche, à droite
+    ctx.save(); ctx.translate(W * 0.74, H * 0.5);
+    for (let r = 40; r < 520; r += 22) { ctx.beginPath(); ctx.arc(0, 0, r, 0, Math.PI * 2); ctx.strokeStyle = accent; ctx.globalAlpha = Math.max(0.04, 0.35 - r / 1500); ctx.lineWidth = 1.5; ctx.stroke(); }
+    ctx.globalAlpha = 1; ctx.strokeStyle = accent; ctx.lineWidth = 6; ctx.lineJoin = "round";
+    const s = up ? 1 : -1;
+    ctx.beginPath(); ctx.moveTo(-70, 20 * s); ctx.lineTo(0, -60 * s); ctx.lineTo(70, 20 * s); ctx.lineTo(35, 20 * s); ctx.lineTo(35, 70 * s); ctx.lineTo(-35, 70 * s); ctx.lineTo(-35, 20 * s); ctx.closePath(); ctx.stroke();
+    ctx.restore();
+    // marque
+    const logo = await loadImg("/static/logo.png?v=8");
+    if (logo) ctx.drawImage(logo, 56, 44, 60, 63);
+    ctx.fillStyle = "#fff"; ctx.font = `600 34px 'Noto Sans JP', ${FONT}`; ctx.textBaseline = "middle";
+    ctx.fillText("俺び寂び", 130, 76);
+    ctx.fillStyle = "#94a3b8"; ctx.font = `500 20px ${FONT}`;
+    ctx.fillText(`hl-agent · ${t.network || "testnet"}`, 132, 108);
+    // actif + sens
+    const sym = String(t.asset).split(":").pop().replace(/^k/, "");
+    const coin = await loadImg(`/coins/${encodeURIComponent(sym)}.svg`);
+    let x = 56, y = 200;
+    if (coin) { ctx.save(); ctx.beginPath(); ctx.arc(x + 28, y, 28, 0, Math.PI * 2); ctx.clip(); ctx.fillStyle = "#fff"; ctx.fillRect(x, y - 28, 56, 56); ctx.drawImage(coin, x, y - 28, 56, 56); ctx.restore(); x += 72; }
+    ctx.fillStyle = "#fff"; ctx.font = `700 40px ${FONT}`; ctx.fillText(t.asset, x, y);
+    x += ctx.measureText(t.asset).width + 20;
+    const label = `${t.direction === "LONG" ? "LONG" : "SHORT"} ${t.leverage ? Math.round(t.leverage) + "X" : ""}`.trim();
+    ctx.font = `700 26px ${FONT}`;
+    const lw = ctx.measureText(label).width + 36;
+    rr(ctx, x, y - 24, lw, 48, 12); ctx.fillStyle = accent + "33"; ctx.fill(); ctx.strokeStyle = accent; ctx.lineWidth = 2; ctx.stroke();
+    ctx.fillStyle = accent; ctx.fillText(label, x + 18, y + 1);
+    // ROE
+    ctx.fillStyle = accent; ctx.font = `700 150px ${FONT}`; ctx.textBaseline = "alphabetic";
+    ctx.fillText(t.roe == null ? "—" : `${t.roe >= 0 ? "+" : "−"}${Math.abs(t.roe).toFixed(1)}%`, 50, 405);
+    if (t.pnl != null) { ctx.fillStyle = "#e2e8f0"; ctx.font = `600 34px ${FONT}`; ctx.fillText(`${t.pnl >= 0 ? "+" : "−"}${fmtUsd(Math.abs(t.pnl), 2)}`, 56, 460); }
+    // prix
+    const cols = [["Entrée", fmtUsd(t.entry)], [t.closed ? "Sortie" : "Cours", fmtUsd(t.price)]];
+    x = 56;
+    for (const [k, v] of cols) {
+      ctx.fillStyle = "#94a3b8"; ctx.font = `500 24px ${FONT}`; ctx.fillText(k, x, 540);
+      ctx.fillStyle = "#fff"; ctx.font = `600 34px ${FONT}`; ctx.fillText(v, x, 585);
+      x += Math.max(ctx.measureText(v).width, 160) + 60;
+    }
+    ctx.fillStyle = "#64748b"; ctx.font = `500 22px ${FONT}`; ctx.textAlign = "right";
+    ctx.fillText(t.closed ? `Fermé · ${when(t.closed_ms)}${t.reason ? " · " + t.reason : ""}` : `En cours · ${when(Date.now())}`, W - 56, 620);
+    ctx.textAlign = "left";
+  }
+  function openCard(t) {
+    state.card = t;
+    $("#card").classList.remove("hidden");
+    $("#card .card-live").classList.toggle("hidden", !!t.closed);
+    drawCard($("#card-canvas"), t).catch(() => {});
+  }
+  function closeCard() { state.card = null; $("#card").classList.add("hidden"); }
+  // Position ouverte → la carte suit le poll du compte.
+  function refreshCard() {
+    const t = state.card;
+    if (!t || t.closed || !state.data) return;
+    const p = state.data.account.positions.find((q) => q.asset === t.asset);
+    if (!p) { t.closed = true; t.closed_ms = Date.now(); $("#card .card-live").classList.add("hidden"); }
+    else Object.assign(t, { roe: p.roe, pnl: p.upnl, price: p.price, entry: p.entry, leverage: p.leverage, direction: p.direction });
+    drawCard($("#card-canvas"), t).catch(() => {});
+  }
+  const cardBlob = () => new Promise((res) => $("#card-canvas").toBlob(res, "image/png"));
+  const cardName = () => `${String(state.card?.asset || "trade").replace(/[^A-Za-z0-9]/g, "")}-${state.card?.direction || ""}-${new Date().toISOString().slice(0, 10)}.png`;
+  $("#card-close").addEventListener("click", closeCard);
+  $(".card-backdrop").addEventListener("click", closeCard);
+  $("#card-save").addEventListener("click", async () => {
+    const b = await cardBlob(); if (!b) return;
+    const a = document.createElement("a"); a.href = URL.createObjectURL(b); a.download = cardName(); a.click();
+    setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+  });
+  $("#card-share").addEventListener("click", async () => {
+    const b = await cardBlob(); if (!b) return;
+    const file = new File([b], cardName(), { type: "image/png" });
+    const t = state.card, txt = `${t.asset} ${t.direction} ${Math.round(t.leverage || 0)}x · ${fmtPct(t.roe)} — 俺び寂び`;
+    if (navigator.canShare && navigator.canShare({ files: [file] })) {
+      try { await navigator.share({ files: [file], text: txt }); } catch (e) {}
+    } else $("#card-save").click();
+  });
+  $("#positions").addEventListener("click", (e) => {
+    const el = e.target.closest("[data-card-pos]"); if (!el) return;
+    const p = state.data.account.positions[Number(el.dataset.cardPos)]; if (!p) return;
+    openCard({ asset: p.asset, direction: p.direction, leverage: p.leverage, roe: p.roe, pnl: p.upnl, entry: p.entry, price: p.price, network: state.data.network, closed: false });
+  });
+
   // ---- sheet -----------------------------------------------------------------------
 
   function openSheet(type, id, html) {
@@ -130,7 +227,7 @@
     document.body.style.overflow = "";
   }
   $(".sheet-backdrop").addEventListener("click", closeSheet);
-  document.addEventListener("keydown", (e) => e.key === "Escape" && closeSheet());
+  document.addEventListener("keydown", (e) => { if (e.key === "Escape") { closeCard(); closeSheet(); } });
 
   function subtabs(key, tabs) {
     const cur = tabs.some((t) => t[0] === state.subtab[key]) ? state.subtab[key] : tabs[0][0];
@@ -139,6 +236,11 @@
       .join("")}</div>${tabs.map(([id, , html]) => `<div data-pane="${esc(id)}" class="${id === cur ? "" : "hidden"}">${html}</div>`).join("")}`;
   }
   $("#sheet-body").addEventListener("click", (e) => {
+    const tr = e.target.closest("[data-card-trade]");
+    if (tr) {
+      const t = (state.trades || [])[Number(tr.dataset.cardTrade)]; if (!t) return;
+      return openCard({ asset: t.asset, direction: t.direction, leverage: t.leverage, roe: t.roe_pct, pnl: t.pnl_usd, entry: t.entry_price, price: t.exit_price, closed: true, closed_ms: t.closed_ms, reason: t.reason, network: state.data?.network });
+    }
     const b = e.target.closest(".subtabs button");
     if (!b) return;
     const key = b.parentElement.dataset.key;
@@ -201,6 +303,7 @@
   async function refreshState() {
     state.data = await api("/api/state");
     renderHeader();
+    refreshCard();
     if (state.view === "home") await renderHome();
     if (state.view === "runs") renderRuns();
   }
@@ -233,7 +336,7 @@
 
     const pos = $("#positions");
     pos.innerHTML = acct.positions.length
-      ? acct.positions.map((p) => `<div class="item">
+      ? acct.positions.map((p, i) => `<div class="item tap" data-card-pos="${i}">
           ${coinIcon(p.asset)}
           <div class="main"><div class="title"><span class="name">${esc(p.asset)}</span><span class="pill ${p.direction === "LONG" ? "pill-green" : "pill-red"}">${p.direction === "LONG" ? "Long" : "Short"} ${p.leverage}x</span></div>
           <div class="sub">${fmtNum(p.size, 4)} @ ${fmtUsd(p.entry, 2)} · cours ${fmtUsd(p.price, 2)} · liq ${fmtUsd(p.liquidation, 0)}</div></div>
@@ -320,7 +423,8 @@
     const m = rep.metrics;
     const initial = eq.length ? eq[0][1] : null, last = eq.length ? eq[eq.length - 1][1] : null;
     const ret = initial ? ((last - initial) / initial) * 100 : null;
-    const trades = rep.trades.slice(0, 50).map((t) => `<tr>
+    state.trades = rep.trades;
+    const trades = rep.trades.slice(0, 50).map((t, i) => `<tr class="tap" data-card-trade="${i}">
       <td>${coinInline(t.asset)}<br><span class="event when">${when(t.closed_ms)}</span></td>
       <td>${esc(t.direction)} ${t.leverage ? t.leverage + "x" : ""}<br><span class="event when">${esc(t.reason || "")}</span></td>
       <td class="r ${cls(t.pnl_usd)}">${fmtUsd(t.pnl_usd, 2)}<br><span class="event when ${cls(t.roe_pct)}">${fmtPct(t.roe_pct)}</span></td>

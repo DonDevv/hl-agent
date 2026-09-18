@@ -21,9 +21,11 @@ from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Any
 
+import httpx
 import polars as pl
 from fastapi import Depends, FastAPI, HTTPException, Request, Response
 from fastapi.responses import FileResponse, JSONResponse
+from fastapi.responses import Response as RawResponse
 from fastapi.staticfiles import StaticFiles
 
 from hl_agent.copy.discovery import LeaderRow, TraderProfile, blend, fetch_leaderboard, profile
@@ -40,6 +42,7 @@ from hl_agent.web.jobs import JobError, JobRegistry
 STATIC_DIR = Path(__file__).with_name("static")
 RUN_META = "run.json"
 TOKEN_ENV = "HL_AGENT_WEB_TOKEN"
+COIN_ICON_ORIGIN = "https://app.hyperliquid.xyz"
 COOKIE = "hl_token"
 LIVE_AFTER_S = 300.0  # a run whose last equity point is older than this is shown as stale
 TRADERS_TTL_S = 30 * 60
@@ -686,6 +689,30 @@ def create_app(
     def index() -> FileResponse:
         # Always revalidate the shell so a new ``?v=`` asset stamp reaches phones.
         return FileResponse(STATIC_DIR / "index.html", headers={"cache-control": "no-cache"})
+
+    @app.get("/coins/{sym}.svg", include_in_schema=False)
+    def coin_icon(sym: str) -> RawResponse:
+        """Hyperliquid's public coin icons, proxied so the share card can draw them on a
+        canvas (the origin sends no CORS header) and cached on disk after the first hit."""
+        if not sym.isalnum() or len(sym) > 20:
+            raise HTTPException(404)
+        cached = cfg.cache_dir / "coins" / f"{sym}.svg"
+        if not cached.exists():
+            try:
+                r = httpx.get(
+                    f"{COIN_ICON_ORIGIN}/coins/{sym}.svg", timeout=10, follow_redirects=True
+                )
+            except httpx.HTTPError as e:
+                raise HTTPException(502, str(e)) from e
+            if r.status_code != 200 or "svg" not in r.headers.get("content-type", ""):
+                raise HTTPException(404)
+            cached.parent.mkdir(parents=True, exist_ok=True)
+            cached.write_bytes(r.content)
+        return RawResponse(
+            cached.read_bytes(),
+            media_type="image/svg+xml",
+            headers={"cache-control": "public, max-age=604800"},
+        )
 
     @app.get("/manifest.webmanifest", include_in_schema=False)
     def manifest() -> FileResponse:

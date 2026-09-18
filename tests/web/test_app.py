@@ -164,6 +164,34 @@ def test_static_shell_and_pwa_files(env: dict[str, Any]) -> None:
         assert c.get(f"/static/{f}").status_code == 200, f
 
 
+def test_coin_icon_proxies_and_caches_hyperliquid_svgs(
+    env: dict[str, Any], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import hl_agent.web.app as web
+
+    calls: list[str] = []
+
+    class Resp:
+        def __init__(self, status: int, body: bytes, ctype: str) -> None:
+            self.status_code, self.content, self.headers = status, body, {"content-type": ctype}
+
+    def fake_get(url: str, **_: Any) -> Resp:
+        calls.append(url)
+        if url.endswith("/BTC.svg"):
+            return Resp(200, b"<svg/>", "image/svg+xml")
+        return Resp(404, b"nope", "text/html")
+
+    monkeypatch.setattr(web.httpx, "get", fake_get)
+    c = TestClient(make_app(env))
+    r = c.get("/coins/BTC.svg")
+    assert r.status_code == 200 and r.content == b"<svg/>"
+    assert r.headers["content-type"].startswith("image/svg+xml")
+    assert c.get("/coins/BTC.svg").status_code == 200
+    assert calls == [f"{web.COIN_ICON_ORIGIN}/coins/BTC.svg"]  # second hit served from disk
+    assert c.get("/coins/NOPE.svg").status_code == 404
+    assert c.get("/coins/..%2Fx.svg").status_code == 404
+
+
 def test_mirror_plans_include_requested_and_100_dollar_budgets(env: dict[str, Any]) -> None:
     c = TestClient(make_app(env))
     m = c.get(f"/api/mirror/{TRADER}?budget=999").json()
