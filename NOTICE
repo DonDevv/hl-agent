@@ -1,0 +1,17 @@
+hl-agent — Copyright (c) 2026 DonDevv, MIT License (see LICENSE).
+
+Third-party material
+--------------------
+
+strategies/caribou-degen, strategies/compass, strategies/pendulum
+  Derived from the Senpi strategy catalog (https://github.com/senpi-ai/senpi-skills),
+  Copyright (c) 2026 Senpi AI Inc., MIT License. The scanners and recipes were adapted
+  to run on this engine; the strategy contract (scan(inputs, ctx), runtime.yaml, the
+  exit DSL and guard-rail semantics) follows Senpi's published runtime concepts.
+
+Fonts
+-----
+The share card uses Inter (SIL OFL) and, when present, Teodor (commercial, Pangram
+Pangram Foundry). Teodor is NOT distributed with this repository: place your own licensed
+copy at src/hl_agent/web/static/fonts/Teodor-Light.woff2 or the card falls back to
+Instrument Serif (SIL OFL).

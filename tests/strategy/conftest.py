@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import math
+import os
 from collections.abc import Callable
 from pathlib import Path
 
@@ -12,7 +13,8 @@ from hl_agent.strategy.sources import ReplaySource
 
 REPO = Path(__file__).resolve().parents[2]
 STRATEGIES = REPO / "strategies"
-SENPI = Path(r"C:\Users\userr\Desktop\senpi-skills-main\senpi-skills-main\strategies")
+# Optional: a checkout of https://github.com/senpi-ai/senpi-skills for the catalog tests.
+SENPI = Path(os.environ.get("SENPI_STRATEGIES", REPO.parent / "senpi-skills" / "strategies"))
 
 H = 3_600_000
 INSTRUMENTS = [
