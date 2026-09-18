@@ -121,7 +121,13 @@
   const loadImg = (src) => imgCache[src] || (imgCache[src] = new Promise((res) => {
     const im = new Image(); im.onload = () => res(im); im.onerror = () => res(null); im.src = src;
   }));
-  const rr = (ctx, x, y, w, h, r) => { ctx.beginPath(); ctx.roundRect(x, y, w, h, r); };
+  // roundRect n'existe pas sur iOS < 16 : tracé manuel.
+  const rr = (ctx, x, y, w, h, r) => {
+    ctx.beginPath();
+    ctx.moveTo(x + r, y); ctx.arcTo(x + w, y, x + w, y + h, r); ctx.arcTo(x + w, y + h, x, y + h, r);
+    ctx.arcTo(x, y + h, x, y, r); ctx.arcTo(x, y, x + w, y, r); ctx.closePath();
+  };
+  const cardError = (e) => { const el = $("#card-error"); if (el) { el.textContent = `Carte : ${e && e.message ? e.message : e}`; el.classList.remove("hidden"); } };
   // Même police que la carte Hyperliquid (Inter Bold) pour tous les chiffres.
   const FONT = "Inter, -apple-system, 'Segoe UI', sans-serif";
   // Le gros pourcentage HL est en Teodor Light (police commerciale) : on la sert depuis
@@ -217,7 +223,7 @@
     state.card = t;
     $("#card").classList.remove("hidden");
     $("#card .card-live").classList.toggle("hidden", !!t.closed);
-    drawCard($("#card-canvas"), t).catch(() => {});
+    $("#card-error")?.classList.add("hidden"); drawCard($("#card-canvas"), t).catch(cardError);
   }
   function closeCard() { state.card = null; $("#card").classList.add("hidden"); }
   // Position ouverte → la carte suit le poll du compte.
@@ -227,7 +233,7 @@
     const p = state.data.account.positions.find((q) => q.asset === t.asset);
     if (!p) { t.closed = true; t.closed_ms = Date.now(); $("#card .card-live").classList.add("hidden"); }
     else Object.assign(t, { roe: p.roe, pnl: p.upnl, price: p.price, entry: p.entry, leverage: p.leverage, direction: p.direction });
-    drawCard($("#card-canvas"), t).catch(() => {});
+    $("#card-error")?.classList.add("hidden"); drawCard($("#card-canvas"), t).catch(cardError);
   }
   const cardBlob = () => new Promise((res) => $("#card-canvas").toBlob(res, "image/png"));
   const cardName = () => `${String(state.card?.asset || "trade").replace(/[^A-Za-z0-9]/g, "")}-${state.card?.direction || ""}-${new Date().toISOString().slice(0, 10)}.png`;

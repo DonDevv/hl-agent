@@ -10,18 +10,18 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <meta name="apple-mobile-web-app-title" content="俺び寂び">
 <link rel="manifest" href="/manifest.webmanifest">
-<link rel="icon" href="/static/favicon.png?v=10" type="image/png">
-<link rel="apple-touch-icon" href="/static/icon-180.png?v=10">
+<link rel="icon" href="/static/favicon.png?v=11" type="image/png">
+<link rel="apple-touch-icon" href="/static/icon-180.png?v=11">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600;9..40,700&family=Inter:wght@500;600;700;800&family=Instrument+Serif&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="/static/app.css?v=10">
+<link rel="stylesheet" href="/static/app.css?v=11">
 </head>
 <body>
 <div id="app">
   <header class="top">
     <div class="brand">
-      <img src="/static/logo.png?v=10" alt="" width="42" height="44">
+      <img src="/static/logo.png?v=11" alt="" width="42" height="44">
     </div>
     <div class="top-right">
       <span id="jobs-dot" class="pill pill-blue hidden" title="jobs en cours">…</span>
@@ -169,6 +169,7 @@
     <div class="card-panel">
       <canvas id="card-canvas" width="1950" height="1394"></canvas>
       <div class="card-live hidden"><span class="dot dot-green"></span> en direct</div>
+      <div id="card-error" class="muted hidden"></div>
       <div class="btn-row">
         <button class="btn btn-dark" id="card-share">Partager</button>
         <button class="btn" id="card-save">Enregistrer</button>
@@ -186,6 +187,6 @@
 
   <div id="toast" class="toast hidden"></div>
 </div>
-<script src="/static/app.js?v=10"></script>
+<script src="/static/app.js?v=11"></script>
 </body>
 </html>

@@ -1,6 +1,6 @@
 /* Police du gros pourcentage sur la carte (Teodor Light, fichier sous licence à déposer ici). */
 @font-face { font-family: "Teodor"; font-weight: 300; font-style: normal; font-display: swap;
-  src: url("/static/fonts/Teodor-Light.woff2?v=10") format("woff2"); }
+  src: url("/static/fonts/Teodor-Light.woff2?v=11") format("woff2"); }
 
 /* hl-agent dashboard: Senpi-like, light only. */
 :root {
@@ -252,3 +252,4 @@ table.t td.r, table.t th.r { text-align: right; white-space: nowrap; }
   font-size: 13px; font-weight: 500; max-width: 90vw; text-align: center;
   box-shadow: 0 6px 20px rgba(0,0,0,.2);
 }
+#card-error { color: #b42318; font-size: 13px; text-align: center; }
