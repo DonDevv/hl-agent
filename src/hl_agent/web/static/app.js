@@ -122,8 +122,11 @@
     const im = new Image(); im.onload = () => res(im); im.onerror = () => res(null); im.src = src;
   }));
   const rr = (ctx, x, y, w, h, r) => { ctx.beginPath(); ctx.roundRect(x, y, w, h, r); };
-  const FONT = "-apple-system, Inter, 'Segoe UI', sans-serif";
+  // Même police que la carte Hyperliquid (Inter Bold) pour tous les chiffres.
+  const FONT = "Inter, -apple-system, 'Segoe UI', sans-serif";
+  const fontsReady = document.fonts ? Promise.all(["500 24px Inter", "600 34px Inter", "700 40px Inter", "800 150px Inter"].map((f) => document.fonts.load(f).catch(() => null))) : Promise.resolve();
   async function drawCard(c, t) {
+    await fontsReady;
     const ctx = c.getContext("2d"), W = c.width, H = c.height;
     const up = (t.roe ?? 0) >= 0, accent = up ? "#22c55e" : "#ef4444";
     const g = ctx.createLinearGradient(0, 0, W, H);
@@ -156,7 +159,7 @@
     rr(ctx, x, y - 24, lw, 48, 12); ctx.fillStyle = accent + "33"; ctx.fill(); ctx.strokeStyle = accent; ctx.lineWidth = 2; ctx.stroke();
     ctx.fillStyle = accent; ctx.fillText(label, x + 18, y + 1);
     // ROE
-    ctx.fillStyle = accent; ctx.font = `700 150px ${FONT}`; ctx.textBaseline = "alphabetic";
+    ctx.fillStyle = accent; ctx.font = `800 150px ${FONT}`; ctx.textBaseline = "alphabetic";
     ctx.fillText(t.roe == null ? "—" : `${t.roe >= 0 ? "+" : "−"}${Math.abs(t.roe).toFixed(1)}%`, 50, 405);
     if (t.pnl != null) { ctx.fillStyle = "#e2e8f0"; ctx.font = `600 34px ${FONT}`; ctx.fillText(`${t.pnl >= 0 ? "+" : "−"}${fmtUsd(Math.abs(t.pnl), 2)}`, 56, 460); }
     // prix
