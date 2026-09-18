@@ -128,55 +128,89 @@
   // /static/fonts/Teodor-Light.woff2 si le fichier est là, sinon Instrument Serif (sosie libre).
   const NUMFONT = "Teodor, 'Instrument Serif', Georgia, serif";
   const fontsReady = document.fonts ? Promise.all(["500 24px Inter", "600 34px Inter", "700 40px Inter", "300 160px Teodor", "400 160px 'Instrument Serif'"].map((f) => document.fonts.load(f).catch(() => null))) : Promise.resolve();
+  // Prix façon HL : virgule décimale, pas de symbole, 5 chiffres significatifs sous 1.
+  const fmtPx = (v) => {
+    if (v == null || !isFinite(Number(v))) return "—";
+    const n = Math.abs(Number(v));
+    const dec = n >= 1 ? 2 : Math.min(8, 4 - Math.floor(Math.log10(n || 1)));
+    return Number(v).toLocaleString("fr-FR", { minimumFractionDigits: Math.min(dec, 2), maximumFractionDigits: dec });
+  };
+  // Flèche "maison" de la carte HL (coins arrondis), centrée en (0,0), pointe vers le haut.
+  const arrowPath = (ctx) => {
+    ctx.beginPath();
+    ctx.moveTo(0, -88); ctx.lineTo(84, 0); ctx.lineTo(38, 0); ctx.lineTo(38, 62); ctx.lineTo(-38, 62); ctx.lineTo(-38, 0); ctx.lineTo(-84, 0); ctx.closePath();
+  };
+  // Réplique de la carte de partage Hyperliquid (975×697, rendue en 2x).
   async function drawCard(c, t) {
     await fontsReady;
-    const ctx = c.getContext("2d"), W = c.width, H = c.height;
-    // Palette Hyperliquid (extraite de leur CSS) : vert #50d2c1, rouge #ed7088, fond #0f1a1f → #04060c.
-    const up = (t.roe ?? 0) >= 0, accent = up ? "#50d2c1" : "#ed7088";
+    const W = 975, H = 697, S = 2;
+    c.width = W * S; c.height = H * S;
+    const ctx = c.getContext("2d"); ctx.scale(S, S);
+    const up = (t.roe ?? 0) >= 0;
+    const accent = up ? "#50d2c1" : "#ed7088", rgb = up ? "80,210,193" : "237,112,136";
+    // fond + coins arrondis + liseré
+    rr(ctx, 0, 0, W, H, 28); ctx.save(); ctx.clip();
     const g = ctx.createLinearGradient(0, 0, W, H);
-    g.addColorStop(0, "#0f1a1f"); g.addColorStop(1, "#04060c");
+    g.addColorStop(0, "#0e1a1e"); g.addColorStop(1, "#070f13");
     ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
-    // anneaux concentriques + flèche, à droite
-    ctx.save(); ctx.translate(W * 0.74, H * 0.5);
-    for (let r = 40; r < 520; r += 22) { ctx.beginPath(); ctx.arc(0, 0, r, 0, Math.PI * 2); ctx.strokeStyle = accent; ctx.globalAlpha = Math.max(0.04, 0.35 - r / 1500); ctx.lineWidth = 1.5; ctx.stroke(); }
-    ctx.globalAlpha = 1; ctx.strokeStyle = accent; ctx.lineWidth = 6; ctx.lineJoin = "round";
-    const s = up ? 1 : -1;
-    ctx.beginPath(); ctx.moveTo(-70, 20 * s); ctx.lineTo(0, -60 * s); ctx.lineTo(70, 20 * s); ctx.lineTo(35, 20 * s); ctx.lineTo(35, 70 * s); ctx.lineTo(-35, 70 * s); ctx.lineTo(-35, 20 * s); ctx.closePath(); ctx.stroke();
+    // anneaux : contours décalés de la flèche (trait épais − trait plus fin), du plus loin au plus près
+    const o = document.createElement("canvas"); o.width = W * S; o.height = H * S;
+    const oc = o.getContext("2d"); oc.scale(S, S); oc.translate(688, 356); oc.lineJoin = "round"; oc.lineCap = "round";
+    const rings = [];
+    for (let d = 14, k = 0; d < 720; k++, d += 12 + k * 0.45) rings.push(d);
+    for (const d of rings.reverse()) {
+      const alpha = Math.max(0.05, 0.85 * Math.exp(-d / 150));
+      arrowPath(oc); oc.globalCompositeOperation = "source-over"; oc.strokeStyle = `rgba(${rgb},${alpha.toFixed(3)})`; oc.lineWidth = d * 2 + 1.4; oc.stroke();
+      arrowPath(oc); oc.globalCompositeOperation = "destination-out"; oc.strokeStyle = "#000"; oc.lineWidth = d * 2 - 1.4; oc.stroke();
+    }
+    // intérieur de la flèche : nettoyé, teinte légère, un seul contour intérieur (comme HL)
+    arrowPath(oc); oc.globalCompositeOperation = "destination-out"; oc.fill();
+    oc.globalCompositeOperation = "source-over";
+    arrowPath(oc); oc.fillStyle = `rgba(${rgb},0.10)`; oc.fill();
+    oc.save(); arrowPath(oc); oc.clip();
+    arrowPath(oc); oc.strokeStyle = `rgba(${rgb},0.7)`; oc.lineWidth = 2 * 11 + 1.4; oc.stroke();
+    arrowPath(oc); oc.globalCompositeOperation = "destination-out"; oc.lineWidth = 2 * 11 - 1.4; oc.stroke();
+    oc.globalCompositeOperation = "source-over"; arrowPath(oc); oc.fillStyle = `rgba(${rgb},0.10)`; oc.fill();
+    oc.restore();
+    arrowPath(oc); oc.strokeStyle = accent; oc.lineWidth = 2.4; oc.stroke();
+    ctx.drawImage(o, 0, 0, W, H);
     ctx.restore();
+    rr(ctx, 0.5, 0.5, W - 1, H - 1, 28); ctx.strokeStyle = "rgba(255,255,255,0.09)"; ctx.lineWidth = 1; ctx.stroke();
     // marque
-    const logo = await loadImg("/static/logo.png?v=8");
-    if (logo) ctx.drawImage(logo, 56, 44, 60, 63);
-    ctx.fillStyle = "#fff"; ctx.font = `600 34px 'Noto Sans JP', ${FONT}`; ctx.textBaseline = "middle";
-    ctx.fillText("俺び寂び", 130, 76);
-    ctx.fillStyle = "#949e9c"; ctx.font = `500 20px ${FONT}`;
-    ctx.fillText(`hl-agent · ${t.network || "testnet"}`, 132, 108);
+    const logo = await loadImg("/static/logo.png");
+    ctx.textBaseline = "middle"; ctx.textAlign = "left";
+    if (logo) ctx.drawImage(logo, 50, 60, 40, 40);
+    ctx.fillStyle = "#f6fefd"; ctx.font = `500 30px 'Noto Sans JP', ${FONT}`; ctx.fillText("俺び寂び", 104, 80);
     // actif + sens
     const sym = String(t.asset).split(":").pop().replace(/^k/, "");
     const coin = await loadImg(`/coins/${encodeURIComponent(sym)}.svg`);
-    let x = 56, y = 200;
-    if (coin) { ctx.save(); ctx.beginPath(); ctx.arc(x + 28, y, 28, 0, Math.PI * 2); ctx.clip(); ctx.fillStyle = "#fff"; ctx.fillRect(x, y - 28, 56, 56); ctx.drawImage(coin, x, y - 28, 56, 56); ctx.restore(); x += 72; }
-    ctx.fillStyle = "#fff"; ctx.font = `700 40px ${FONT}`; ctx.fillText(t.asset, x, y);
-    x += ctx.measureText(t.asset).width + 20;
+    let x = 52, y = 256;
+    if (coin) { ctx.save(); ctx.beginPath(); ctx.arc(x + 18, y, 18, 0, Math.PI * 2); ctx.clip(); ctx.fillStyle = "#fff"; ctx.fillRect(x, y - 18, 36, 36); ctx.drawImage(coin, x, y - 18, 36, 36); ctx.restore(); x += 50; }
+    ctx.fillStyle = "#f6fefd"; ctx.font = `500 24px ${FONT}`; ctx.fillText(t.asset, x, y);
+    x += ctx.measureText(t.asset).width + 16;
     const label = `${t.direction === "LONG" ? "LONG" : "SHORT"} ${t.leverage ? Math.round(t.leverage) + "X" : ""}`.trim();
-    ctx.font = `700 26px ${FONT}`;
-    const lw = ctx.measureText(label).width + 36;
-    rr(ctx, x, y - 24, lw, 48, 12); ctx.fillStyle = up ? "#17453f" : "#3a1f27"; ctx.fill();
-    ctx.fillStyle = accent; ctx.fillText(label, x + 18, y + 1);
-    // ROE
-    ctx.fillStyle = accent; ctx.font = `300 170px ${NUMFONT}`; ctx.textBaseline = "alphabetic";
-    ctx.fillText(t.roe == null ? "—" : `${t.roe >= 0 ? "+" : "−"}${Math.abs(t.roe).toFixed(1).replace(".", ",")}%`, 46, 410);
-    if (t.pnl != null) { ctx.fillStyle = "#f6fefd"; ctx.font = `600 34px ${FONT}`; ctx.fillText(`${t.pnl >= 0 ? "+" : "−"}${fmtUsd(Math.abs(t.pnl), 2)}`, 56, 460); }
+    ctx.font = `500 22px ${FONT}`;
+    const lw = ctx.measureText(label).width + 24;
+    rr(ctx, x, y - 18, lw, 36, 6); ctx.fillStyle = up ? "#173f3c" : "#3d222a"; ctx.fill();
+    ctx.fillStyle = accent; ctx.fillText(label, x + 12, y + 1);
+    // ROE (Teodor Light)
+    ctx.textBaseline = "alphabetic";
+    ctx.fillStyle = accent; ctx.font = `300 122px ${NUMFONT}`;
+    ctx.fillText(t.roe == null ? "—" : `${t.roe >= 0 ? "+" : "−"}${Math.abs(t.roe).toFixed(1).replace(".", ",")}%`, 48, 412);
     // prix
-    const cols = [["Entrée", fmtUsd(t.entry)], [t.closed ? "Sortie" : "Cours", fmtUsd(t.price)]];
-    x = 56;
+    const cols = [["Prix d'entrée", fmtPx(t.entry)], [t.closed ? "Prix de sortie" : "Prix actuel", fmtPx(t.price)]];
+    x = 52;
     for (const [k, v] of cols) {
-      ctx.fillStyle = "#949e9c"; ctx.font = `500 24px ${FONT}`; ctx.fillText(k, x, 540);
-      ctx.fillStyle = "#f6fefd"; ctx.font = `600 34px ${FONT}`; ctx.fillText(v, x, 585);
-      x += Math.max(ctx.measureText(v).width, 160) + 60;
+      ctx.fillStyle = "#949e9c"; ctx.font = `400 22px ${FONT}`; ctx.fillText(k, x, 526);
+      const kw = ctx.measureText(k).width;
+      ctx.fillStyle = "#f6fefd"; ctx.font = `400 24px ${FONT}`; ctx.fillText(v, x, 564);
+      x += Math.max(kw, ctx.measureText(v).width) + 40;
     }
-    ctx.fillStyle = "#9aa3a4"; ctx.font = `500 22px ${FONT}`; ctx.textAlign = "right";
-    ctx.fillText(t.closed ? `Fermé · ${when(t.closed_ms)}${t.reason ? " · " + t.reason : ""}` : `En cours · ${when(Date.now())}`, W - 56, 620);
-    ctx.textAlign = "left";
+    // pied : réseau + état
+    ctx.fillStyle = "#949e9c"; ctx.font = `400 22px ${FONT}`;
+    ctx.fillText(`hl-agent · ${t.network || ""}${t.pnl != null ? ` · PnL ${t.pnl >= 0 ? "+" : "−"}${fmtUsd(Math.abs(t.pnl), 2)}` : ""}`, 52, 613);
+    ctx.fillStyle = "#f6fefd"; ctx.font = `400 24px ${FONT}`;
+    ctx.fillText(t.closed ? `Fermé · ${when(t.closed_ms)}${t.reason ? " · " + t.reason : ""}` : `En cours · ${when(Date.now())}`, 52, 651);
   }
   function openCard(t) {
     state.card = t;
