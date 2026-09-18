@@ -1,5 +1,5 @@
 /* Minimal service worker: network first, cached shell as offline fallback. API calls are never cached. */
-const CACHE = "hl-agent-v13";
+const CACHE = "hl-agent-v14";
 const SHELL = ["/", "/static/app.css", "/static/app.js", "/static/logo.png", "/manifest.webmanifest"];
 
 self.addEventListener("install", (e) => {
