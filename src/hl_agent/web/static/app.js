@@ -5,6 +5,12 @@
   const $ = (sel, root) => (root || document).querySelector(sel);
   const $$ = (sel, root) => Array.from((root || document).querySelectorAll(sel));
   const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+  // Logo de l'actif (icônes publiques de l'app Hyperliquid) ; le ticker reste derrière si l'image manque.
+  const coinIcon = (asset, size = 40) => {
+    const sym = String(asset || "").split(":").pop().replace(/^k/, "");
+    return `<div class="icon coin" style="width:${size}px;height:${size}px"><span>${esc(sym.slice(0, 4))}</span><img src="https://app.hyperliquid.xyz/coins/${encodeURIComponent(sym)}.svg" alt="" loading="lazy" onerror="this.remove()"></div>`;
+  };
+  const coinInline = (asset) => `<span class="coin-inline">${coinIcon(asset, 18)}${esc(asset)}</span>`;
 
   const state = {
     view: "home",
@@ -31,7 +37,9 @@
     if (v == null || Number.isNaN(v)) return "—";
     const n = Number(v);
     const digits = d ?? (Math.abs(n) >= 1000 ? 0 : 2);
-    return (n < 0 ? "-" : "") + "$" + Math.abs(n).toLocaleString("en-US", { minimumFractionDigits: digits, maximumFractionDigits: digits });
+    // Prix < 1 $ (PUMP, ARB…) : garder 4 chiffres significatifs plutôt que d'afficher $0.00.
+    const sig = Math.abs(n) > 0 && Math.abs(n) < 1 ? Math.max(digits, 3 - Math.floor(Math.log10(Math.abs(n)))) : digits;
+    return (n < 0 ? "-" : "") + "$" + Math.abs(n).toLocaleString("en-US", { minimumFractionDigits: digits, maximumFractionDigits: sig });
   };
   const fmtPct = (v, d = 1) => (v == null || Number.isNaN(v) ? "—" : `${v >= 0 ? "+" : ""}${Number(v).toFixed(d)}%`);
   const fmtNum = (v, d = 2) => (v == null || Number.isNaN(v) ? "—" : Number(v).toLocaleString("en-US", { maximumFractionDigits: d }));
@@ -226,7 +234,7 @@
     const pos = $("#positions");
     pos.innerHTML = acct.positions.length
       ? acct.positions.map((p) => `<div class="item">
-          <div class="icon">${esc(p.asset.slice(0, 4))}</div>
+          ${coinIcon(p.asset)}
           <div class="main"><div class="title"><span class="name">${esc(p.asset)}</span><span class="pill ${p.direction === "LONG" ? "pill-green" : "pill-red"}">${p.direction === "LONG" ? "Long" : "Short"} ${p.leverage}x</span></div>
           <div class="sub">${fmtNum(p.size, 4)} @ ${fmtUsd(p.entry, 2)} · cours ${fmtUsd(p.price, 2)} · liq ${fmtUsd(p.liquidation, 0)}</div></div>
           <div class="right"><div class="v ${cls(p.upnl)}">${fmtUsd(p.upnl, 2)}</div><div class="s ${cls(p.roe)}">${fmtPct(p.roe)}</div></div>
@@ -313,11 +321,11 @@
     const initial = eq.length ? eq[0][1] : null, last = eq.length ? eq[eq.length - 1][1] : null;
     const ret = initial ? ((last - initial) / initial) * 100 : null;
     const trades = rep.trades.slice(0, 50).map((t) => `<tr>
-      <td>${esc(t.asset)}<br><span class="event when">${when(t.closed_ms)}</span></td>
+      <td>${coinInline(t.asset)}<br><span class="event when">${when(t.closed_ms)}</span></td>
       <td>${esc(t.direction)} ${t.leverage ? t.leverage + "x" : ""}<br><span class="event when">${esc(t.reason || "")}</span></td>
       <td class="r ${cls(t.pnl_usd)}">${fmtUsd(t.pnl_usd, 2)}<br><span class="event when ${cls(t.roe_pct)}">${fmtPct(t.roe_pct)}</span></td>
     </tr>`).join("");
-    const events = evs.map((e) => `<div class="event"><div><b>${esc(e.kind)}</b> ${esc(e.asset || "")} <span class="pill pill-muted">${esc(e.reason || "")}</span></div>
+    const events = evs.map((e) => `<div class="event"><div><b>${esc(e.kind)}</b> ${e.asset ? coinInline(e.asset) : ""} <span class="pill pill-muted">${esc(e.reason || "")}</span></div>
       <div class="when">${when(e.time_ms)} · ${esc(JSON.stringify(e.payload || {}).slice(0, 160))}</div></div>`).join("");
     const controls = r.kind === "live"
       ? `<section class="btn-row">${r.stop
@@ -638,7 +646,7 @@
         <div><div class="k">Budget min</div><div class="v">${fmtUsd(p.min_budget)}</div></div>
       </div>
       <table class="t"><tr><th>Actif</th><th>Levier</th><th class="r">Marge</th><th class="r">Verdict</th></tr>
-      ${p.lines.map((l) => `<tr><td>${esc(l.asset)} <span class="pill ${l.direction === "LONG" ? "pill-green" : "pill-red"}">${l.direction === "LONG" ? "L" : "S"}</span></td><td>${l.leverage}x <span class="event when">(og ${l.og_leverage}x)</span></td><td class="r">${fmtUsd(l.margin)}</td><td class="r">${l.verdict === "open" ? `<span class="pill pill-green">ouvrir</span>` : `<span class="pill pill-muted">${esc(l.verdict)}</span>`}</td></tr>`).join("")}
+      ${p.lines.map((l) => `<tr><td>${coinInline(l.asset)} <span class="pill ${l.direction === "LONG" ? "pill-green" : "pill-red"}">${l.direction === "LONG" ? "L" : "S"}</span></td><td>${l.leverage}x <span class="event when">(og ${l.og_leverage}x)</span></td><td class="r">${fmtUsd(l.margin)}</td><td class="r">${l.verdict === "open" ? `<span class="pill pill-green">ouvrir</span>` : `<span class="pill pill-muted">${esc(l.verdict)}</span>`}</td></tr>`).join("")}
       </table>`;
     const keys = Object.keys(m.plans).sort((a, b) => Number(b) - Number(a));
     $("#sheet-body").innerHTML = `
