@@ -10,18 +10,18 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <meta name="apple-mobile-web-app-title" content="俺び寂び">
 <link rel="manifest" href="/manifest.webmanifest">
-<link rel="icon" href="/static/favicon.png?v=14" type="image/png">
-<link rel="apple-touch-icon" href="/static/icon-180.png?v=14">
+<link rel="icon" href="/static/favicon.png?v=15" type="image/png">
+<link rel="apple-touch-icon" href="/static/icon-180.png?v=15">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600;9..40,700&family=Inter:wght@500;600;700;800&family=Instrument+Serif&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="/static/app.css?v=14">
+<link rel="stylesheet" href="/static/app.css?v=15">
 </head>
 <body>
 <div id="app">
   <header class="top">
     <div class="brand">
-      <img src="/static/logo.png?v=14" alt="" width="42" height="44">
+      <img src="/static/logo.png?v=15" alt="" width="42" height="44">
     </div>
     <div class="top-right">
       <span id="jobs-dot" class="pill pill-blue hidden" title="jobs en cours">…</span>
@@ -125,6 +125,17 @@
     </section>
 
     <section>
+      <div class="section-label">Notifications</div>
+      <div class="card">
+        <div class="hint" id="push-hint">…</div>
+        <div class="row">
+          <button class="btn btn-dark" id="push-on" disabled>Activer sur cet appareil</button>
+          <button class="btn" id="push-test" disabled>Tester</button>
+        </div>
+      </div>
+    </section>
+
+    <section>
       <div class="section-label">Clé agent</div>
       <div class="card"><div class="mono" id="agent-key">…</div></div>
     </section>
@@ -187,6 +198,6 @@
 
   <div id="toast" class="toast hidden"></div>
 </div>
-<script src="/static/app.js?v=14"></script>
+<script src="/static/app.js?v=15"></script>
 </body>
 </html>

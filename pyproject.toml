@@ -26,6 +26,7 @@ dev = [
 web = [
     "fastapi>=0.110",
     "uvicorn[standard]>=0.29",
+    "pywebpush>=2.0",
 ]
 
 [project.scripts]
@@ -50,6 +51,10 @@ python_version = "3.12"
 strict = true
 mypy_path = "src"
 packages = ["hl_agent"]
+
+[[tool.mypy.overrides]]
+module = ["pywebpush", "py_vapid"]
+ignore_missing_imports = true
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

@@ -1,5 +1,5 @@
 /* Minimal service worker: network first, cached shell as offline fallback. API calls are never cached. */
-const CACHE = "hl-agent-v14";
+const CACHE = "hl-agent-v15";
 const SHELL = ["/", "/static/app.css", "/static/app.js", "/static/logo.png", "/manifest.webmanifest"];
 
 self.addEventListener("install", (e) => {
@@ -22,5 +22,31 @@ self.addEventListener("fetch", (e) => {
         return res;
       })
       .catch(() => caches.match(e.request))
+  );
+});
+
+/* Web Push: the server sends {title, body, url, tag}; a tap focuses the app on that run. */
+self.addEventListener("push", (e) => {
+  let d = {};
+  try { d = e.data ? e.data.json() : {}; } catch (_) { d = { title: "hl-agent", body: e.data && e.data.text() }; }
+  e.waitUntil(
+    self.registration.showNotification(d.title || "hl-agent", {
+      body: d.body || "",
+      tag: d.tag || undefined,
+      icon: "/static/icon-180.png",
+      badge: "/static/icon-180.png",
+      data: { url: d.url || "/" },
+    })
+  );
+});
+self.addEventListener("notificationclick", (e) => {
+  e.notification.close();
+  const url = new URL((e.notification.data && e.notification.data.url) || "/", self.location.origin).href;
+  e.waitUntil(
+    self.clients.matchAll({ type: "window", includeUncontrolled: true }).then((list) => {
+      const c = list[0];
+      if (c) return c.navigate(url).then((w) => (w || c).focus());
+      return self.clients.openWindow(url);
+    })
   );
 });

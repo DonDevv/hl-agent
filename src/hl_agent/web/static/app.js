@@ -850,9 +850,69 @@
       ["Web", `${settings.web_host || ""}:${settings.web_port || ""}`],
     ];
     $("#settings").innerHTML = kv.map(([k, v]) => `<div><span class="k">${esc(k)}</span><span class="v" title="${esc(v)}">${esc(v)}</span></div>`).join("");
+    loadPush().catch((e) => ($("#push-hint").textContent = e.message));
     $("#auth-hint").textContent = settings.auth ? "Authentification par token active : les runs live peuvent être lancés depuis cette page." : "Aucun token web : la page est ouverte et le lancement de runs live depuis la page est désactivé.";
   }
   $("#new-fetch").addEventListener("click", openFetch);
+
+  // ---- push notifications ------------------------------------------------------------
+
+  const b64ToU8 = (s) => {
+    const pad = "=".repeat((4 - (s.length % 4)) % 4);
+    const raw = atob((s + pad).replace(/-/g, "+").replace(/_/g, "/"));
+    return Uint8Array.from(raw, (c) => c.charCodeAt(0));
+  };
+  async function loadPush() {
+    const hint = $("#push-hint"), on = $("#push-on"), test = $("#push-test");
+    let info = null;
+    try { info = await api("/api/push"); } catch (_) { info = null; }
+    if (!info || !info.available) {
+      hint.textContent = "Push non configuré sur le serveur (dépendance pywebpush absente).";
+      on.disabled = test.disabled = true;
+      return;
+    }
+    test.disabled = !info.subscriptions;
+    const supported = "serviceWorker" in navigator && "PushManager" in window && "Notification" in window;
+    if (!supported) {
+      hint.textContent = "Ce navigateur ne reçoit pas de push. Sur iPhone : Partager → « Sur l’écran d’accueil », puis ouvre l’app depuis son icône.";
+      on.disabled = true;
+      return;
+    }
+    const reg = await navigator.serviceWorker.ready;
+    const sub = await reg.pushManager.getSubscription();
+    const n = `${info.subscriptions} appareil${info.subscriptions > 1 ? "s" : ""} abonné${info.subscriptions > 1 ? "s" : ""}`;
+    if (sub) hint.textContent = `Activées sur cet appareil · ${n}.`;
+    else if (Notification.permission === "denied") hint.textContent = `Refusées dans les réglages de ce navigateur · ${n}.`;
+    else hint.textContent = `Une notification à chaque position ouverte ou fermée, garde-fou déclenché, kill switch ou agent silencieux · ${n}.`;
+    on.textContent = sub ? "Désactiver sur cet appareil" : "Activer sur cet appareil";
+    on.disabled = !sub && Notification.permission === "denied";
+    on.onclick = async () => {
+      on.disabled = true;
+      try {
+        if (sub) {
+          await api("/api/push/unsubscribe", { method: "POST", body: { endpoint: sub.endpoint } });
+          await sub.unsubscribe();
+          toast("Notifications désactivées");
+        } else {
+          if ((await Notification.requestPermission()) !== "granted") throw new Error("Permission refusée");
+          const s = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: b64ToU8(info.public_key) });
+          await api("/api/push/subscribe", { method: "POST", body: s.toJSON() });
+          toast("Notifications activées");
+        }
+      } catch (err) {
+        toast(err.message);
+      }
+      await loadPush();
+    };
+    test.onclick = async () => {
+      try {
+        const r = await api("/api/push/test", { method: "POST" });
+        toast(`Test envoyé à ${r.sent} appareil${r.sent > 1 ? "s" : ""}`);
+      } catch (err) {
+        toast(err.message);
+      }
+    };
+  }
   $("#login").addEventListener("submit", async (e) => {
     e.preventDefault();
     try {
@@ -876,7 +936,15 @@
       /* toast shown by api() on 401 */
     }
   }
-  refresh();
+  refresh().then(() => {
+    // a tapped notification lands on "/?run=<name>": open that run
+    const wanted = new URLSearchParams(location.search).get("run");
+    if (wanted) {
+      history.replaceState(null, "", "/");
+      setView("runs");
+      openRun(wanted).catch(() => {});
+    }
+  });
   loadJobs().catch(() => {});
   setInterval(refresh, 15000);
   document.addEventListener("visibilitychange", () => !document.hidden && refresh());

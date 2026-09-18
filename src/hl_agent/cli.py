@@ -655,6 +655,8 @@ def cmd_web(args: argparse.Namespace, s: Settings) -> int:
     import uvicorn
 
     from hl_agent.web.app import AccountView, WebConfig, create_app, resolve_token
+    from hl_agent.web.push import PushService
+    from hl_agent.web.watch import RunWatcher
 
     address = _address(s)
     market = build_venue(s, address, trading=False).market
@@ -685,7 +687,12 @@ def cmd_web(args: argparse.Namespace, s: Settings) -> int:
         env=env,
     )
     view = AccountView(account, market.mids, lambda: agent_key_status(s, address))
-    app = create_app(cfg, view, mainnet_feed)
+    push = PushService(s.cache_dir / "push")
+    app = create_app(cfg, view, mainnet_feed, push=push)
+    if push.available:
+        RunWatcher(s.runs_dir, push).start()
+    else:
+        print("push notifications off: pip install -e '.[web]' (pywebpush)", file=sys.stderr)
     host, port = args.host or s.web_host, args.port or s.web_port
     print(f"dashboard on http://{host}:{port}  auth: {'token' if cfg.token else 'OPEN'}")
     if not cfg.token and host not in ("127.0.0.1", "localhost"):

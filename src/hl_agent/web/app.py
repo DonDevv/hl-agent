@@ -38,6 +38,7 @@ from hl_agent.telemetry.events import EventLog, to_dict
 from hl_agent.telemetry.metrics import compute, trades_from_events
 from hl_agent.web.catalog import cached_card, card_json, find_packages, runtime_text
 from hl_agent.web.jobs import JobError, JobRegistry
+from hl_agent.web.push import Notification, PushService
 
 STATIC_DIR = Path(__file__).with_name("static")
 RUN_META = "run.json"
@@ -462,6 +463,7 @@ def create_app(
     clock: Callable[[], float] = time.time,
     traders: TradersCache | None = None,
     jobs: JobRegistry | None = None,
+    push: PushService | None = None,
 ) -> FastAPI:
     app = FastAPI(title="hl-agent", docs_url=None, redoc_url=None)
     traders = traders or TradersCache(
@@ -640,6 +642,37 @@ def create_app(
             return jobs.kill(jid).to_json()
         except JobError as exc:
             raise HTTPException(404, str(exc)) from exc
+
+    # ---- push notifications --------------------------------------------------------
+
+    def pushing() -> PushService:
+        if push is None or not push.available:
+            raise HTTPException(404, "push notifications are not configured on this server")
+        return push
+
+    @app.get("/api/push", dependencies=[api])
+    def push_info() -> dict[str, Any]:
+        if push is None or not push.available:
+            return {"available": False, "public_key": "", "subscriptions": 0}
+        return {"available": True, "public_key": push.public_key, "subscriptions": len(push)}
+
+    @app.post("/api/push/subscribe", dependencies=[api])
+    def push_subscribe(body: dict[str, Any]) -> dict[str, Any]:
+        try:
+            return {"ok": True, "subscriptions": pushing().subscribe(body)}
+        except ValueError as exc:
+            raise HTTPException(400, str(exc)) from exc
+
+    @app.post("/api/push/unsubscribe", dependencies=[api])
+    def push_unsubscribe(body: dict[str, Any]) -> dict[str, Any]:
+        return {"ok": True, "subscriptions": pushing().unsubscribe(str(body.get("endpoint", "")))}
+
+    @app.post("/api/push/test", dependencies=[api])
+    def push_test() -> dict[str, Any]:
+        note = Notification(
+            "Notifications actives", f"hl-agent · {cfg.network} · tu recevras chaque trade ici"
+        )
+        return {"sent": pushing().notify(note)}
 
     # ---- data cache + settings -----------------------------------------------------
 
