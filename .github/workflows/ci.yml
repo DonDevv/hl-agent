@@ -26,4 +26,9 @@ jobs:
           set -o pipefail
           pytest -p no:warnings -rfE 2>&1 | tee pytest.log || status=$?
           { echo '```'; tail -n 80 pytest.log; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
+          if [ -n "${status:-}" ]; then
+            grep -E '^(FAILED|ERROR) ' pytest.log | head -n 8 | sed 's/^/::error title=pytest::/'
+            tail -n 60 pytest.log | python -c 'import sys;t=sys.stdin.read();print("::error title=pytest tail::"+t.replace("%","%25").replace("","%0D").replace("
+","%0A"))'
+          fi
           exit ${status:-0}
