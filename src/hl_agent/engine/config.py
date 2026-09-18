@@ -82,9 +82,19 @@ class GuardRails:
     drawdown_halt_pct: float = 0.0  # 0 = disabled
     drawdown_reset_on_day_rollover: bool = False
     per_asset_cooldown_seconds: int = 0
+    # Liquidity gate (hl-agent extension, not in Senpi): checked against the L2 book right
+    # before an entry. A stop-market exits into that book, so a thin one turns a -8% stop into
+    # -25%. 0 disables each check.
+    max_spread_pct: float = 0.0  # best bid/ask spread, percent of mid
+    min_depth_multiple: float = 0.0  # exit-side notional within the band vs order notional
+    depth_band_pct: float = 1.0  # width of the band around mid, percent
+
+    @property
+    def liquidity_enabled(self) -> bool:
+        return bool(self.max_spread_pct or self.min_depth_multiple)
 
     def __post_init__(self) -> None:
-        for name in ("daily_loss_limit_pct", "drawdown_halt_pct"):
+        for name in ("daily_loss_limit_pct", "drawdown_halt_pct", "max_spread_pct"):
             v = getattr(self, name)
             if v < 0 or v > 100:
                 raise ConfigError(f"{name} must be within 0-100, got {v}")

@@ -13,6 +13,7 @@ from typing import Protocol
 
 from hl_agent.data.models import AccountState, Direction, Instrument
 from hl_agent.engine.dsl import CloseReason
+from hl_agent.engine.guardrails import Book
 from hl_agent.engine.signals import Signal
 from hl_agent.engine.sizing import OrderPlan
 
@@ -31,6 +32,10 @@ class MarketView(Protocol):
     def price(self, asset: str) -> float | None: ...
     def instrument(self, asset: str) -> Instrument | None: ...
     def account(self) -> AccountState: ...
+
+    def order_book(self, asset: str) -> Book | None:
+        """L2 snapshot for the liquidity gate; ``None`` when the venue has none (backtest)."""
+        ...
 
 
 class SignalSource(Protocol):

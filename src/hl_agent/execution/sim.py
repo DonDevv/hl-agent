@@ -20,6 +20,7 @@ from dataclasses import dataclass, replace
 
 from hl_agent.data.models import AccountState, Candle, Direction, Instrument, Position
 from hl_agent.engine.dsl import CloseReason
+from hl_agent.engine.guardrails import Book
 from hl_agent.engine.ports import Fill
 from hl_agent.engine.sizing import OrderPlan
 from hl_agent.strategy.sources import ReplaySource
@@ -134,6 +135,9 @@ class SimBroker:
 
     def instrument(self, asset: str) -> Instrument | None:
         return next((i for i in self._src.instruments() if i.name == asset), None)
+
+    def order_book(self, asset: str) -> Book | None:
+        return None  # candles only: the liquidity gate is a live-venue concern
 
     def account(self) -> AccountState:
         rows: list[Position] = []

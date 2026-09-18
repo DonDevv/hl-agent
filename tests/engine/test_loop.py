@@ -3,12 +3,14 @@
 from __future__ import annotations
 
 from collections.abc import Sequence
+from dataclasses import replace
 
 import pytest
 
 from hl_agent.data.models import AccountState, Direction, Instrument, Position
 from hl_agent.engine.config import DslConfig, GuardRails, Phase1, StrategyConfig, Tier
 from hl_agent.engine.dsl import CloseReason
+from hl_agent.engine.guardrails import Book
 from hl_agent.engine.loop import Engine, EngineConfig
 from hl_agent.engine.ports import Fill
 from hl_agent.engine.signals import Signal
@@ -28,6 +30,7 @@ class FakeVenue:
     def __init__(self, cash: float, prices: dict[str, float]) -> None:
         self.cash = cash
         self.prices = dict(prices)
+        self.books: dict[str, Book] = {}
         self.positions: dict[str, tuple[Direction, float, float, int]] = {}
         self.stops: dict[str, float] = {}
         self.closes: list[tuple[str, CloseReason]] = []
@@ -38,6 +41,9 @@ class FakeVenue:
 
     def instrument(self, asset: str) -> Instrument | None:
         return INSTRUMENTS.get(asset)
+
+    def order_book(self, asset: str) -> Book | None:
+        return self.books.get(asset)
 
     def account(self) -> AccountState:
         pos = []
@@ -208,3 +214,20 @@ def test_source_close_requests_close_tracked_positions_only() -> None:
     assert [(e.kind, e.reason) for e in ev] == [("closed", "source_closed")]
     assert venue.closes == [("BTC", CloseReason.SOURCE_CLOSED)] and engine.positions == {}
     assert engine.rails.last_close_ms["BTC"] == MIN
+
+
+def test_liquidity_gate_blocks_entry_and_reports_the_book() -> None:
+    cfg = replace(CFG, rails=GuardRails(max_spread_pct=0.3, min_depth_multiple=20))
+    venue = FakeVenue(100.0, {"BTC": 50_000.0, "ETH": 3_000.0})
+    venue.books["BTC"] = {"bids": [(49_000.0, 1.0)], "asks": [(51_000.0, 1.0)]}  # 4% spread
+    q = Queue()
+    engine = Engine(cfg, venue, venue, q, now_ms=0)
+    q.push("BTC", Direction.LONG, 0)
+    (ev,) = engine.step(0)
+    assert (ev.kind, ev.reason) == ("rejected", "risk_gate_liquidity")
+    assert ev.payload["spread_pct"] == 4.0 and ev.payload["notional_usd"] > 0
+    assert not venue.positions
+    # deep book → same signal goes through
+    venue.books["BTC"] = {"bids": [(49_990.0, 10.0)], "asks": [(50_010.0, 10.0)]}
+    q.push("BTC", Direction.LONG, MIN)
+    assert [(e.kind, e.reason) for e in engine.step(MIN)] == [("opened", "submitted")]

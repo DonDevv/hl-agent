@@ -34,6 +34,7 @@ from hl_agent.data.models import (
     Instrument,
 )
 from hl_agent.engine.dsl import CloseReason
+from hl_agent.engine.guardrails import Book
 from hl_agent.engine.ports import Fill
 from hl_agent.engine.sizing import OrderPlan
 
@@ -240,6 +241,10 @@ class LiveMarketSource:
 
     def instrument(self, asset: str) -> Instrument | None:
         return self._instruments.get(asset)
+
+    def order_book(self, asset: str) -> Book | None:
+        book: Book = self._memo(("book", asset), lambda: self._client.order_book(asset, depth=50))
+        return book
 
 
 # ---- writes ------------------------------------------------------------------------

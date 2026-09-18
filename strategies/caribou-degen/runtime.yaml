@@ -152,6 +152,11 @@ risk:
     drawdown_halt_pct: 22
     drawdown_reset_on_day_rollover: true
     per_asset_cooldown_seconds: 14400       # v2 per_asset_cooldown_minutes 240
+    # hl-agent : garde-fou de liquidité, vérifié sur le carnet L2 juste avant l'entrée.
+    # PUMP testnet (18/09) : spread 2 %, 403 $ de bids à ±1 % → stop -8 % exécuté à -25 %.
+    max_spread_pct: 0.5                     # spread bid/ask max, % du mid (0,5 % = ~1,25 % de ROE à 5x)
+    min_depth_multiple: 5                   # notional côté sortie à ±band >= 5x la position
+    depth_band_pct: 1
 
 notifications:
   dsl_lifecycle: true

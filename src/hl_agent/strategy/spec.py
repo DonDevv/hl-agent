@@ -125,6 +125,10 @@ class GuardRailsSpec(_Model):
     drawdown_halt_pct: float = Field(default=0.0, ge=0, le=100)
     drawdown_reset_on_day_rollover: bool = False
     per_asset_cooldown_seconds: int = Field(default=0, ge=0)
+    # hl-agent extension (see engine.config.GuardRails)
+    max_spread_pct: float = Field(default=0.0, ge=0, le=100)
+    min_depth_multiple: float = Field(default=0.0, ge=0)
+    depth_band_pct: float = Field(default=1.0, gt=0, le=100)
 
     @field_validator("cooldown_seconds")
     @classmethod
@@ -222,6 +226,9 @@ class RuntimeSpec(_Model):
             drawdown_halt_pct=g.drawdown_halt_pct,
             drawdown_reset_on_day_rollover=g.drawdown_reset_on_day_rollover,
             per_asset_cooldown_seconds=g.per_asset_cooldown_seconds,
+            max_spread_pct=g.max_spread_pct,
+            min_depth_multiple=g.min_depth_multiple,
+            depth_band_pct=g.depth_band_pct,
         )
 
     def engine_config(

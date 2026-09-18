@@ -1,7 +1,8 @@
 from __future__ import annotations
 
+from hl_agent.data.models import Direction
 from hl_agent.engine.config import GuardRails
-from hl_agent.engine.guardrails import GateReason, GuardRailState
+from hl_agent.engine.guardrails import GateReason, GuardRailState, check_liquidity
 
 DAY = 86_400_000
 H = 3_600_000
@@ -71,3 +72,37 @@ def test_disabled_rails_never_block() -> None:
         s = s.record_entry().record_close(cfg, "BTC", -5.0, H)
     assert s.check_account(cfg, H, 1.0) is None
     assert s.check_asset(cfg, H, "BTC") is None
+
+
+# PUMP on testnet, 18 Sep 2026: 2% spread, $403 of bids within 1% — a $120 stop-market ate the book.
+THIN = {"bids": [(0.0044, 50_000.0), (0.0042, 2_000_000.0)], "asks": [(0.00449, 4_000.0)]}
+DEEP = {
+    "bids": [(0.2050, 20_000.0), (0.2045, 20_000.0), (0.1900, 1_000_000.0)],
+    "asks": [(0.2052, 20_000.0)],
+}
+
+
+def test_liquidity_gate_rejects_wide_spread_or_thin_exit_side() -> None:
+    cfg = GuardRails(max_spread_pct=0.3, min_depth_multiple=20, depth_band_pct=1.0)
+    reason, liq = check_liquidity(cfg, THIN, Direction.LONG, notional_usd=120.0)
+    assert reason is GateReason.RISK_GATE_LIQUIDITY
+    assert liq is not None and liq.spread_pct > 1.9
+    assert liq.exit_depth_usd == 0  # best bid already sits >1% from mid: nothing in the band
+    # tight spread but not enough resting bids for the size → still rejected
+    reason, liq = check_liquidity(cfg, DEEP, Direction.LONG, notional_usd=1_000.0)
+    assert reason is GateReason.RISK_GATE_LIQUIDITY
+    assert liq is not None and liq.exit_depth_usd == 0.2050 * 20_000 + 0.2045 * 20_000
+    # ARB-like book at a normal size passes; a short is measured against the asks
+    assert check_liquidity(cfg, DEEP, Direction.LONG, 120.0)[0] is None
+    reason, liq = check_liquidity(cfg, DEEP, Direction.SHORT, 120.0)
+    assert reason is None and liq is not None and liq.exit_depth_usd == 0.2052 * 20_000
+
+
+def test_liquidity_gate_is_off_by_default_and_fails_closed_on_empty_book() -> None:
+    assert check_liquidity(GuardRails(), THIN, Direction.LONG, 120.0) == (None, None)
+    on = GuardRails(max_spread_pct=0.3)
+    assert check_liquidity(on, None, Direction.LONG, 120.0) == (None, None)  # backtest: no book
+    assert check_liquidity(on, {"bids": [], "asks": []}, Direction.LONG, 120.0) == (
+        GateReason.RISK_GATE_LIQUIDITY,
+        None,
+    )

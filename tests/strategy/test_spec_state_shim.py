@@ -33,6 +33,10 @@ def test_native_recipe_maps_to_engine_config() -> None:
     assert cfg.dsl.weak_peak_cut.min_value == 3.0 and not cfg.dsl.dead_weight_cut.enabled
     assert cfg.rails.max_consecutive_losses == 3 and cfg.rails.cooldown_seconds == 7200
     assert cfg.rails.per_asset_cooldown_seconds == 14400
+    assert not cfg.rails.liquidity_enabled  # Senpi recipes don't know the hl-agent gate
+    degen = load_runtime_spec(STRATEGIES / "caribou-degen", {"HL_WALLET": "0x1"}).engine_config()
+    assert degen.rails.liquidity_enabled and degen.rails.max_spread_pct == 0.5
+    assert degen.rails.min_depth_multiple == 5 and degen.rails.depth_band_pct == 1.0
     sc = spec.external_scanners[0]
     assert sc.name == "compass_signals" and sc.effective_timeout == 120
     assert spec.scanner_dir(sc) == (STRATEGIES / "compass" / "scanners").resolve()

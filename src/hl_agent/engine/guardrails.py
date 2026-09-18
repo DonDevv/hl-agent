@@ -8,17 +8,20 @@ Semantics follow Senpi's ``risk.guard_rails`` (``runtime-concepts.md``):
 * ``max_consecutive_losses`` + ``cooldown_seconds`` — a losing streak pauses entries.
 * ``drawdown_halt_pct`` — equity vs its peak (optionally reset each UTC day) halts entries.
 * ``per_asset_cooldown_seconds`` — no re-entry on an asset just closed.
+* ``max_spread_pct`` / ``min_depth_multiple`` — hl-agent extension: the L2 book must be
+  tight and deep enough for the stop-market exit to fill near its trigger.
 
 Every gate answers with a reason code, so rejections are auditable in the event log.
 """
 
 from __future__ import annotations
 
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field, replace
 from enum import StrEnum
 from types import MappingProxyType
 
+from hl_agent.data.models import Direction
 from hl_agent.engine.config import GuardRails
 
 _DAY_MS = 86_400_000
@@ -42,6 +45,57 @@ class GateReason(StrEnum):
     RISK_GATE_COOLDOWN = "risk_gate_cooldown"
     RISK_GATE_MAX_DRAWDOWN = "risk_gate_max_drawdown"
     RISK_GATE_ASSET_COOLDOWN = "risk_gate_asset_cooldown"
+    RISK_GATE_LIQUIDITY = "risk_gate_liquidity"
+
+
+Book = Mapping[str, Sequence[tuple[float, float]]]
+"""``{"bids": [(px, sz), ...], "asks": [...]}`` best-first, as the venue returns it."""
+
+
+@dataclass(frozen=True, slots=True)
+class Liquidity:
+    """What the gate measured, so a rejection event can say why."""
+
+    spread_pct: float
+    exit_depth_usd: float  # notional resting on the side a stop would hit, within the band
+    band_pct: float
+
+    def as_payload(self) -> dict[str, float]:
+        return {
+            "spread_pct": round(self.spread_pct, 4),
+            "exit_depth_usd": round(self.exit_depth_usd, 2),
+            "depth_band_pct": self.band_pct,
+        }
+
+
+def measure_liquidity(book: Book, direction: Direction, band_pct: float) -> Liquidity | None:
+    """``None`` when one side of the book is empty (treated as illiquid by the gate)."""
+    bids, asks = book.get("bids", ()), book.get("asks", ())
+    if not bids or not asks:
+        return None
+    best_bid, best_ask = bids[0][0], asks[0][0]
+    mid = (best_bid + best_ask) / 2.0
+    if mid <= 0:
+        return None
+    exit_side = bids if direction is Direction.LONG else asks  # a long's stop sells into bids
+    depth = sum(px * sz for px, sz in exit_side if abs(px - mid) / mid * 100.0 <= band_pct)
+    return Liquidity((best_ask - best_bid) / mid * 100.0, depth, band_pct)
+
+
+def check_liquidity(
+    cfg: GuardRails, book: Book | None, direction: Direction, notional_usd: float
+) -> tuple[GateReason | None, Liquidity | None]:
+    """Liquidity gate: disabled when both thresholds are 0 or the venue has no book."""
+    if not cfg.liquidity_enabled or book is None:
+        return None, None
+    liq = measure_liquidity(book, direction, cfg.depth_band_pct)
+    if liq is None:
+        return GateReason.RISK_GATE_LIQUIDITY, None
+    if cfg.max_spread_pct and liq.spread_pct > cfg.max_spread_pct:
+        return GateReason.RISK_GATE_LIQUIDITY, liq
+    if cfg.min_depth_multiple and liq.exit_depth_usd < cfg.min_depth_multiple * notional_usd:
+        return GateReason.RISK_GATE_LIQUIDITY, liq
+    return None, liq
 
 
 def day_key(now_ms: int) -> int:

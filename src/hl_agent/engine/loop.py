@@ -20,7 +20,7 @@ from hl_agent.data.models import AccountState
 from hl_agent.engine.config import DslConfig, GuardRails, StrategyConfig
 from hl_agent.engine.dedup import DedupState
 from hl_agent.engine.dsl import CloseReason, DslState, roe_pct, stop_price, tick
-from hl_agent.engine.guardrails import GateReason, GuardRailState
+from hl_agent.engine.guardrails import GateReason, GuardRailState, check_liquidity
 from hl_agent.engine.ports import Broker, ExitSource, Fill, MarketView, SignalSource
 from hl_agent.engine.signals import Signal
 from hl_agent.engine.sizing import OrderPlan, plan_order
@@ -245,6 +245,16 @@ class Engine:
         if isinstance(plan, GateReason):
             events.append(self._rejection(signal, plan, now_ms))
             return False
+        # Last check, against the live book: a thin market turns the stop into a slippage trap.
+        rails = self._cfg.rails
+        book = self._market.order_book(signal.asset) if rails.liquidity_enabled else None
+        blocked, liq = check_liquidity(rails, book, plan.direction, plan.notional_usd)
+        if blocked is not None:
+            extra = {"notional_usd": round(plan.notional_usd, 2)}
+            if liq is not None:
+                extra.update(liq.as_payload())
+            events.append(self._rejection(signal, blocked, now_ms, extra))
+            return False
 
         self._open(signal, plan, now_ms, events)
         return True
@@ -282,7 +292,9 @@ class Engine:
         )
 
     @staticmethod
-    def _rejection(signal: Signal, reason: GateReason, now_ms: int) -> Event:
+    def _rejection(
+        signal: Signal, reason: GateReason, now_ms: int, extra: Mapping[str, Any] | None = None
+    ) -> Event:
         return Event(
             now_ms,
             "rejected",
@@ -292,5 +304,6 @@ class Engine:
                 "signal_id": signal.signal_id,
                 "scanner": signal.scanner,
                 "direction": signal.direction.value,
+                **(extra or {}),
             },
         )
