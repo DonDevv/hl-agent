@@ -56,6 +56,7 @@ from hl_agent.execution.live import (
     InfoApi,
     LiveMarketSource,
     Network,
+    _filled,
     load_address,
     load_signer,
 )
@@ -523,6 +524,32 @@ def cmd_stop(args: argparse.Namespace, s: Settings) -> int:
     return 0
 
 
+def cmd_flatten(args: argparse.Namespace, s: Settings) -> int:
+    """Cancel every resting order and market-close every position: a clean slate."""
+    check_network(s.network, accept_real_money=args.i_accept_real_money)
+    address = _address(s)
+    venue = build_venue(s, address, trading=True)
+    if venue.exchange is None or venue.info is None:
+        raise CliError("venue has no trading endpoint")
+    market = venue.market
+    market.refresh(_now_ms())
+    orders = list(venue.info.open_orders(address))
+    positions = market.account().positions
+    print(f"network {s.network.value}  {len(orders)} open orders, {len(positions)} positions")
+    if not args.yes:
+        print("dry run: pass --yes to cancel and close")
+        return 0
+    for o in orders:
+        venue.exchange.cancel(o["coin"], int(o["oid"]))
+        print(f"  cancelled {o['coin']} order {o['oid']}")
+    for p in positions:
+        size, price, _ = _filled(venue.exchange.market_close(p.asset, None, None, 0.01))
+        print(f"  closed {p.asset} {p.direction.value} {size:g} @ {price:g}")
+    market.refresh(_now_ms())
+    print(f"account value {market.account().account_value:.2f}")
+    return 0
+
+
 class RecordingRunner(LiveRunner):
     """``LiveRunner`` that also appends one equity point per tick."""
 
@@ -881,6 +908,11 @@ def build_parser() -> argparse.ArgumentParser:
     sp = sub.add_parser("stop", help="write the STOP file for a run")
     sp.add_argument("name")
     sp.set_defaults(fn=cmd_stop)
+
+    fl = sub.add_parser("flatten", help="cancel all orders and close all positions")
+    fl.add_argument("--yes", action="store_true", help="actually do it (default: dry run)")
+    fl.add_argument("--i-accept-real-money", action="store_true")
+    fl.set_defaults(fn=cmd_flatten)
 
     ru = sub.add_parser("run", help="trade live (testnet unless settings say mainnet)")
     ru.add_argument("package")

@@ -107,6 +107,7 @@ class ExchangeApi(Protocol):
 
 class InfoApi(Protocol):
     def user_fills(self, address: str) -> Any: ...
+    def open_orders(self, address: str, dex: str = "") -> Any: ...
 
 
 def _statuses(response: Any) -> list[dict[str, Any]]:

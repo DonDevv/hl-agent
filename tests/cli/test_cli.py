@@ -241,6 +241,14 @@ def test_status_stop_and_run(
     )
     assert code == 2  # refuses to start over a STOP file
 
+    ex.calls.clear()
+    code, out = run_cli("--settings", str(settings), "flatten", capsys=capsys)
+    assert code == 0 and "dry run" in out and ex.calls == []
+    code, out = run_cli("--settings", str(settings), "flatten", "--yes", capsys=capsys)
+    assert code == 0 and "cancelled BTC order 7" in out and "account value 100.00" in out
+    n = len(LiveMarketSource(HyperliquidClient(transport=transport), ADDR).account().positions)
+    assert [c[0] for c in ex.calls] == ["cancel"] + ["market_close"] * n
+
 
 def test_mainnet_needs_explicit_consent(
     tmp_path: Path, settings: Path, capsys: pytest.CaptureFixture[str]

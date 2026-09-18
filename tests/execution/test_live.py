@@ -171,6 +171,9 @@ class FakeInfo:
     def user_fills(self, address: str) -> Any:
         return self.fills
 
+    def open_orders(self, address: str, dex: str = "") -> Any:
+        return [{"coin": "BTC", "oid": 7}]
+
 
 def broker(market: LiveMarketSource) -> tuple[HlBroker, FakeExchange, FakeInfo]:
     ex, info = FakeExchange(), FakeInfo()
