@@ -131,9 +131,10 @@
   async function drawCard(c, t) {
     await fontsReady;
     const ctx = c.getContext("2d"), W = c.width, H = c.height;
-    const up = (t.roe ?? 0) >= 0, accent = up ? "#22c55e" : "#ef4444";
+    // Palette Hyperliquid (extraite de leur CSS) : vert #50d2c1, rouge #ed7088, fond #0f1a1f → #04060c.
+    const up = (t.roe ?? 0) >= 0, accent = up ? "#50d2c1" : "#ed7088";
     const g = ctx.createLinearGradient(0, 0, W, H);
-    g.addColorStop(0, "#0b0f14"); g.addColorStop(1, up ? "#061a10" : "#1a0808");
+    g.addColorStop(0, "#0f1a1f"); g.addColorStop(1, "#04060c");
     ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
     // anneaux concentriques + flèche, à droite
     ctx.save(); ctx.translate(W * 0.74, H * 0.5);
@@ -147,7 +148,7 @@
     if (logo) ctx.drawImage(logo, 56, 44, 60, 63);
     ctx.fillStyle = "#fff"; ctx.font = `600 34px 'Noto Sans JP', ${FONT}`; ctx.textBaseline = "middle";
     ctx.fillText("俺び寂び", 130, 76);
-    ctx.fillStyle = "#94a3b8"; ctx.font = `500 20px ${FONT}`;
+    ctx.fillStyle = "#949e9c"; ctx.font = `500 20px ${FONT}`;
     ctx.fillText(`hl-agent · ${t.network || "testnet"}`, 132, 108);
     // actif + sens
     const sym = String(t.asset).split(":").pop().replace(/^k/, "");
@@ -159,21 +160,21 @@
     const label = `${t.direction === "LONG" ? "LONG" : "SHORT"} ${t.leverage ? Math.round(t.leverage) + "X" : ""}`.trim();
     ctx.font = `700 26px ${FONT}`;
     const lw = ctx.measureText(label).width + 36;
-    rr(ctx, x, y - 24, lw, 48, 12); ctx.fillStyle = accent + "33"; ctx.fill(); ctx.strokeStyle = accent; ctx.lineWidth = 2; ctx.stroke();
+    rr(ctx, x, y - 24, lw, 48, 12); ctx.fillStyle = up ? "#17453f" : "#3a1f27"; ctx.fill();
     ctx.fillStyle = accent; ctx.fillText(label, x + 18, y + 1);
     // ROE
     ctx.fillStyle = accent; ctx.font = `300 170px ${NUMFONT}`; ctx.textBaseline = "alphabetic";
     ctx.fillText(t.roe == null ? "—" : `${t.roe >= 0 ? "+" : "−"}${Math.abs(t.roe).toFixed(1).replace(".", ",")}%`, 46, 410);
-    if (t.pnl != null) { ctx.fillStyle = "#e2e8f0"; ctx.font = `600 34px ${FONT}`; ctx.fillText(`${t.pnl >= 0 ? "+" : "−"}${fmtUsd(Math.abs(t.pnl), 2)}`, 56, 460); }
+    if (t.pnl != null) { ctx.fillStyle = "#f6fefd"; ctx.font = `600 34px ${FONT}`; ctx.fillText(`${t.pnl >= 0 ? "+" : "−"}${fmtUsd(Math.abs(t.pnl), 2)}`, 56, 460); }
     // prix
     const cols = [["Entrée", fmtUsd(t.entry)], [t.closed ? "Sortie" : "Cours", fmtUsd(t.price)]];
     x = 56;
     for (const [k, v] of cols) {
-      ctx.fillStyle = "#94a3b8"; ctx.font = `500 24px ${FONT}`; ctx.fillText(k, x, 540);
-      ctx.fillStyle = "#fff"; ctx.font = `600 34px ${FONT}`; ctx.fillText(v, x, 585);
+      ctx.fillStyle = "#949e9c"; ctx.font = `500 24px ${FONT}`; ctx.fillText(k, x, 540);
+      ctx.fillStyle = "#f6fefd"; ctx.font = `600 34px ${FONT}`; ctx.fillText(v, x, 585);
       x += Math.max(ctx.measureText(v).width, 160) + 60;
     }
-    ctx.fillStyle = "#64748b"; ctx.font = `500 22px ${FONT}`; ctx.textAlign = "right";
+    ctx.fillStyle = "#9aa3a4"; ctx.font = `500 22px ${FONT}`; ctx.textAlign = "right";
     ctx.fillText(t.closed ? `Fermé · ${when(t.closed_ms)}${t.reason ? " · " + t.reason : ""}` : `En cours · ${when(Date.now())}`, W - 56, 620);
     ctx.textAlign = "left";
   }
