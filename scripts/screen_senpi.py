@@ -91,16 +91,19 @@ def summarise(name: str, run: Path, seconds: float, status: str) -> dict[str, ob
         gross = sum(p for p in pnls if p > 0)
         if gross > 0:
             top3 = round(100 * sum(sorted(pnls, reverse=True)[:3]) / gross, 1)
+    def num(x: object, dec: int) -> float | str:  # metrics use null for "undefined"
+        return round(float(x), dec) if isinstance(x, (int, float)) else ""
+
     row.update(
-        return_pct=round(m.get("return_pct", 0), 1),
+        return_pct=num(m.get("return_pct"), 1),
         trades=trades,
-        win_rate=round(m.get("win_rate", 0), 1),
-        profit_factor=round(m.get("profit_factor", 0), 2),
-        max_dd_pct=round((m.get("drawdown") or {}).get("max_pct", 0), 1),
+        win_rate=num(m.get("win_rate"), 1),
+        profit_factor=num(m.get("profit_factor"), 2),
+        max_dd_pct=num((m.get("drawdown") or {}).get("max_pct"), 1),
         neg_months_pct=round(100 * neg / len(monthly), 0) if monthly else "",
         top3_share_pct=top3,
-        fees=round(m.get("fees_paid", 0)),
-        avg_held_h=round(m.get("avg_held_hours", 0), 1),
+        fees=num(m.get("fees_paid"), 0),
+        avg_held_h=num(m.get("avg_held_hours"), 1),
     )
     return row
 
@@ -150,12 +153,22 @@ def main() -> None:
     ap.add_argument("--workers", type=int, default=3)
     ap.add_argument("--timeout", type=int, default=1800)
     ap.add_argument("--only", default="")
+    ap.add_argument("--resummarise", action="store_true", help="rebuild the csv from runs on disk")
     args = ap.parse_args()
     senpi = Path(args.senpi)
     only = {s for s in args.only.split(",") if s}
     todo = books(senpi, only)
     OUT.mkdir(parents=True, exist_ok=True)
     csv_path = OUT / "results.csv"
+    if args.resummarise:
+        with csv_path.open("w", newline="", encoding="utf-8") as fh:
+            w = csv.DictWriter(fh, fieldnames=FIELDS)
+            w.writeheader()
+            for name, _src in todo:
+                run_dir = REPO / "runs" / "screen" / name
+                if (run_dir / "metrics.json").exists():
+                    w.writerow(summarise(name, run_dir, 0, "ok"))
+        return
     done = set()
     if csv_path.exists():
         with csv_path.open(encoding="utf-8") as fh:
