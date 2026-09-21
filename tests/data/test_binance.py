@@ -37,6 +37,7 @@ def client() -> BinanceClient:
 
 def test_symbols_and_pages_forward() -> None:
     assert symbol_for("btc") == "BTCUSDT"
+    assert symbol_for("kPEPE") == "1000PEPEUSDT"  # HL k-prefix = Binance 1000-prefix
     with pytest.raises(ValueError):
         symbol_for("xyz:NVDA")
     with client() as c:

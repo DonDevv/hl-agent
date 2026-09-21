@@ -28,6 +28,8 @@ def symbol_for(asset: str, quote: str = "USDT") -> str:
     """``"BTC"`` -> ``"BTCUSDT"``. HIP-3 assets (``xyz:NVDA``) have no Binance market."""
     if ":" in asset:
         raise ValueError(f"{asset} is a Hyperliquid-only market, no Binance symbol")
+    if asset.startswith("k") and asset[1:].isupper():  # HL "kPEPE" = 1000 PEPE = Binance 1000PEPE
+        return f"1000{asset[1:]}{quote}"
     return f"{asset.upper()}{quote}"
 
 
